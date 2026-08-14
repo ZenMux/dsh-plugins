@@ -1,0 +1,8 @@
+# External DSH bundle: installing this package adds one idle OAuth controller
+# beside the base profile's command and credential services. No listener or
+# provider request starts until /zenmux login or stored-token recovery.
+- insert:
+    - id: zenmux-oauth
+      name: 'dsh-zenmux-oauth'
+      config:
+        proxyUrl: 'socks5h://127.0.0.1:1080'
