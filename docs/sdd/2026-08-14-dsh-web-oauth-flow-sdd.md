@@ -9,6 +9,7 @@ The host command returns a ZenMux authorization URL, but DSH Web may not surface
 - Load a browser half from the same DSH plugin package.
 - Open a successful `/zenmux login` authorization URL in a separate browser tab.
 - Render a ZenMux-specific command card with a manual link when automatic popup handling is blocked.
+- Refresh a waiting login card to the connected state without writing status probes into the conversation log.
 - Prefer DSH's native Anthropic Messages route with prompt caching and selectable thinking levels.
 - Support deployment OAuth/API environment overrides without embedding a proxy or test endpoint.
 
@@ -25,6 +26,7 @@ The host command returns a ZenMux authorization URL, but DSH Web may not surface
 - `tests/client.spec.ts`: validates URL boundaries and popup arguments.
 - `cordis.patch.yml`: names the plugin `zenmux` and supplies DeepSeek V4 Pro and V4 Flash through DSH's existing Anthropic Messages pi-ai adapter.
 - `src/shared.ts`: browser auto-open and trusted-origin result markers shared by host/client halves.
+- `src/index.ts`: optional DSH Web status route backed by the controller's in-memory OAuth state.
 
 The host command includes its validated OAuth origin beside the authorization URL. The client observes the local `command/executed` acknowledgment and accepts only a successful HTTPS URL (or loopback HTTP development URL) whose origin exactly matches that marker. `ZENMUX_OAUTH_NO_BROWSER=1` adds an exact marker that suppresses auto-open while retaining the manual link.
 
@@ -34,12 +36,16 @@ The host command includes its validated OAuth origin beside the authorization UR
 2. The user submits `/zenmux login`; the existing host plugin performs discovery and creates the loopback listener.
 3. The Web client receives the successful command result and opens its validated authorization URL with `noopener,noreferrer`.
 4. The durable command node uses the ZenMux card. Its link remains available when an automatic popup is blocked.
+5. While a login card is waiting, it polls the same-origin `GET /zenmux/oauth/status` route once per second. The route is registered only when DSH's optional Web server service exists and returns no credentials.
+6. Once the route reports a stored OAuth session, the card changes to `已连接`, shows the expiry detail, hides the login link, and stops polling. Replayed historical login cards follow the same path after a page reload.
 
 ## Edge cases
 
 - Failed commands, non-ZenMux URLs, and other `/zenmux` subcommands never open a window.
 - A URL whose origin differs from the host-emitted OAuth origin never opens.
 - Replayed session logs render the link but do not trigger a new popup because `command/executed` is local-only.
+- Status refreshes use the read-only Web route instead of `/zenmux status`, so they create no command lifecycle records. A missing Web route or transient request failure leaves the manual login state intact and retries for at most five minutes.
+- Headless profiles do not provide `webServer`; optional Cordis injection therefore leaves their existing command-only behavior unchanged.
 - Client-plugin unload removes both the listener and slot registration through Cordis lifecycle ownership.
 
 ## Validation and rollout

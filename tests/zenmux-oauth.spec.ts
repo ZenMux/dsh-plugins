@@ -9,6 +9,7 @@ import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
+import WebServer from '@deepseek-ai/dsh-host-webserver'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import * as zenmuxOAuth from '@zenmux/dsh-plugins'
 import { BROWSER_AUTO_OPEN_DISABLED_LINE } from '../src/shared.ts'
@@ -224,7 +225,9 @@ describe('/zenmux OAuth PKCE lifecycle', () => {
       token_type: 'Bearer',
       scope: 'inference:invoke offline_access',
     }])
-    const test = await harness()
+    const test = await harness(async (ctx) => {
+      await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+    })
     const login = await run(test, ' login')
     expect(login.kind).toBe('success')
     const authorization = loginUrl(login)
@@ -260,6 +263,12 @@ describe('/zenmux OAuth PKCE lifecycle', () => {
     const status = await run(test, ' status')
     expect(status.kind).toBe('success')
     expect(status.text).toContain('is connected')
+    const browserStatus = await callback(`http://127.0.0.1:${test.ctx.webServer.port}/zenmux/oauth/status`)
+    expect(browserStatus.status).toBe(200)
+    expect(JSON.parse(browserStatus.body)).toMatchObject({
+      connected: true,
+      detail: expect.stringContaining('is connected'),
+    })
 
     const body = tokenRequests[0]
     expect(body?.get('grant_type')).toBe('authorization_code')

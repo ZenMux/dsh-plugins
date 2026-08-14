@@ -3,6 +3,7 @@ import {
   authorizationUrlFromResult,
   authorizationUrlFromText,
   BROWSER_AUTO_OPEN_DISABLED_LINE,
+  fetchZenMuxBrowserStatus,
   openAuthorizationWindow,
 } from '../src/client.ts'
 
@@ -46,6 +47,25 @@ describe('ZenMux DSH Web client', () => {
       '_blank',
       'noopener,noreferrer',
     )
+    vi.unstubAllGlobals()
+  })
+
+  it('reads only a valid credential-free browser status response', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
+      connected: true,
+      detail: 'ZenMux OAuth is connected.',
+    }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ connected: 'yes' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchZenMuxBrowserStatus()).resolves.toEqual({
+      connected: true,
+      detail: 'ZenMux OAuth is connected.',
+    })
+    await expect(fetchZenMuxBrowserStatus()).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledWith('/zenmux/oauth/status', {
+      headers: { Accept: 'application/json' },
+    })
     vi.unstubAllGlobals()
   })
 })

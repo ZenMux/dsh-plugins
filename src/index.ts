@@ -18,9 +18,14 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
-import { BROWSER_AUTO_OPEN_DISABLED_LINE, OAUTH_ORIGIN_LINE_PREFIX } from './shared.js'
+import {
+  BROWSER_AUTO_OPEN_DISABLED_LINE,
+  OAUTH_ORIGIN_LINE_PREFIX,
+  ZENMUX_BROWSER_STATUS_PATH,
+} from './shared.js'
 // Side-effect type imports: declaration-merge the injected services onto Context.
 import type {} from '@deepseek-ai/dsh-commands'
+import type {} from '@deepseek-ai/dsh-host-webserver'
 
 /** Cordis plugin name. */
 export const name = 'zenmux'
@@ -426,6 +431,14 @@ class ZenMuxOAuthController {
     return 'ZenMux is not connected. Run /zenmux login.'
   }
 
+  /** Read the OAuth state for the DSH Web card without recording another command. */
+  async browserStatus(): Promise<{ connected: boolean; detail: string }> {
+    return {
+      connected: this.tokenSet !== undefined,
+      detail: await this.status(),
+    }
+  }
+
   /** Start or reuse one pending loopback login and return its browser URL. */
   private async beginLogin(): Promise<string> {
     if (this.pending !== undefined) return this.pending.authorizationUrl
@@ -727,6 +740,26 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new ZenMuxOAuthController(ctx, resolveConfig(config))
   await controller.start()
   ctx.effect(() => () => controller.dispose(), 'zenmux.lifecycle')
+  ctx.inject(['webServer'], (httpCtx) => {
+    httpCtx.effect(() => httpCtx.webServer.register({
+      kind: 'exact',
+      path: ZENMUX_BROWSER_STATUS_PATH,
+      handler: async (request, response) => {
+        if (request.method !== 'GET') {
+          response.writeHead(405, { Allow: 'GET' })
+          response.end()
+          return
+        }
+        const body = JSON.stringify(await controller.browserStatus())
+        response.writeHead(200, {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Content-Type-Options': 'nosniff',
+        })
+        response.end(body)
+      },
+    }), 'zenmux: browser OAuth status')
+  })
   ctx.commands.register({
     name: 'zenmux',
     description: 'sign in to ZenMux with OAuth PKCE or view its authentication status',
