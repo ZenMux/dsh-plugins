@@ -4,7 +4,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 /** Cordis companion plugin name. */
-export declare const name = "zenmux-oauth-invariant";
+export declare const name = "zenmux-invariant";
 /** Service required before the companion can reserve package ownership. */
 export declare const inject: string[];
 /**

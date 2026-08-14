@@ -13,7 +13,7 @@ The plugin repository originally declared the unscoped package name `dsh-zenmux-
 
 ## Non-goals
 
-- Change the Cordis plugin id `zenmux-oauth` or the `/zenmux` command.
+- Change the `/zenmux` command.
 - Change OAuth endpoints, credentials, configuration, or token behavior.
 
 ## Affected Files / Modules
@@ -30,7 +30,7 @@ There are no data-model or OAuth API changes. The public installation specifier 
 
 ## Control Flow
 
-After npm installation, DSH reads the package's `dsh.bundle.patch` declaration, inserts the `zenmux-oauth` controller, and imports `@zenmux/dsh-plugins`. The controller then follows the existing login, refresh, status, and logout paths unchanged.
+After npm installation, DSH reads the package's `dsh.bundle.patch` declaration, inserts the `zenmux` controller, and imports `@zenmux/dsh-plugins`. The controller then follows the existing login, refresh, status, and logout paths unchanged.
 
 ## Edge Cases
 

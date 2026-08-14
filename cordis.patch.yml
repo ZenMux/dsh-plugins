@@ -1,6 +1,36 @@
-# External DSH bundle: installing this package adds one idle OAuth controller
-# beside the base profile's command and credential services. No listener or
-# provider request starts until /zenmux login or stored-token recovery.
+# External DSH bundle: installing this package adds the ZenMux provider profile
+# to DSH's existing pi-ai adapter and mounts one idle OAuth controller. The
+# Anthropic Messages route uses DSH/pi-ai's native prompt-cache and thinking
+# controls. No listener or provider request starts until the user logs in or
+# selects ZenMux.
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      zenmux:
+        displayName: ZenMux
+        baseURL: !!js >-
+          process.env.ZENMUX_ANTHROPIC_BASE_URL ??
+          `${new URL(process.env.ZENMUX_API_BASE_URL ?? 'https://zenmux.ai/api/v1').origin}/api/anthropic`
+        api: anthropic-messages
+        apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN
+        cacheRetention: short
+        thinkingBudgets:
+          minimal: 1024
+          low: 2048
+          medium: 5120
+          high: 10240
+        models:
+          - id: deepseek/deepseek-v4-flash
+            name: ZenMux · DeepSeek V4 Flash
+            contextWindow: 1000000
+            maxTokens: 32768
+            reasoningEfforts:
+              'off': null
+              minimal: minimal
+              low: low
+              medium: medium
+              high: high
 - insert:
-    - id: zenmux-oauth
+    - id: zenmux
       name: '@zenmux/dsh-plugins'

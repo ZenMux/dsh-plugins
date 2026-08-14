@@ -11,6 +11,7 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import * as zenmuxOAuth from '@zenmux/dsh-plugins'
+import { BROWSER_AUTO_OPEN_DISABLED_LINE } from '../src/shared.ts'
 
 const ACCESS_REF = credentialRef('DSH_TEST_ZENMUX_OAUTH_ACCESS')
 const TOKENS_REF = credentialRef('DSH_TEST_ZENMUX_OAUTH_TOKENS')
@@ -70,7 +71,11 @@ interface Harness {
 }
 
 /** Mount the real command, credential, session, and OAuth plugins. */
-async function harness(beforeOAuth?: (ctx: Context) => Promise<void>, proxyUrl = ''): Promise<Harness> {
+async function harness(
+  beforeOAuth?: (ctx: Context) => Promise<void>,
+  proxyUrl = '',
+  overrides: Partial<zenmuxOAuth.Config> = {},
+): Promise<Harness> {
   root = await mkdtemp(join(tmpdir(), 'dsh-zenmux-oauth-'))
   const ctx = new Context()
   context = ctx
@@ -90,6 +95,7 @@ async function harness(beforeOAuth?: (ctx: Context) => Promise<void>, proxyUrl =
     requestTimeoutMs: 5_000,
     refreshSkewMs: 1_000,
     refreshRetryMs: 10,
+    ...overrides,
   })
   const agent = stubAgent(ctx, `zenmux-oauth-${Math.random()}`)
   ctx.agents.register(agent)
@@ -124,13 +130,16 @@ function callback(url: string): Promise<{ status: number; body: string }> {
 }
 
 /** Return OAuth metadata, token responses, and revocation through one fetch mock. */
-function mockOAuth(tokenResponses: Array<Record<string, unknown>>): URLSearchParams[] {
+function mockOAuth(
+  tokenResponses: Array<Record<string, unknown>>,
+  metadata: Record<string, unknown> = METADATA,
+): URLSearchParams[] {
   const responses = [...tokenResponses]
   const tokenRequests: URLSearchParams[] = []
   const mocked = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
     if (url.endsWith('/.well-known/oauth-authorization-server')) {
-      return new Response(JSON.stringify(METADATA), { status: 200 })
+      return new Response(JSON.stringify(metadata), { status: 200 })
     }
     if (url.endsWith('/oauth/token')) {
       if (!(init?.body instanceof URLSearchParams)) throw new Error('token request body was not URLSearchParams')
@@ -153,10 +162,10 @@ function loginUrl(result: { text?: string }): URL {
   return new URL(line)
 }
 
-describe('dsh-zenmux-oauth registration', () => {
+describe('ZenMux plugin registration', () => {
   it('registers a Loader-safe command and disposes it', async () => {
     const test = await harness()
-    expect(zenmuxOAuth.name).toBe('zenmux-oauth')
+    expect(zenmuxOAuth.name).toBe('zenmux')
     expect(zenmuxOAuth.inject).toEqual(['commands', 'credentials'])
     expect('default' in zenmuxOAuth).toBe(false)
     expect(test.ctx.commands.list(test.agent)).toContainEqual({
@@ -181,9 +190,32 @@ describe('dsh-zenmux-oauth registration', () => {
       'proxyUrl must use http://, https://, socks4a://, or socks5h://',
     )
   })
+
+  it('rejects a non-HTTPS non-loopback OAuth origin', async () => {
+    await expect(harness(undefined, '', { oauthOrigin: 'http://auth.example.test' })).rejects.toThrow(
+      'oauthOrigin must be an HTTPS origin',
+    )
+  })
 })
 
 describe('/zenmux OAuth PKCE lifecycle', () => {
+  it('uses a configured OAuth origin and can suppress browser auto-open', async () => {
+    const origin = 'https://auth.example.test'
+    mockOAuth([], {
+      ...METADATA,
+      issuer: origin,
+      authorization_endpoint: `${origin}/oauth/authorize`,
+      token_endpoint: `${origin}/oauth/token`,
+      revocation_endpoint: `${origin}/oauth/revoke`,
+    })
+    const test = await harness(undefined, '', { oauthOrigin: origin, browserAutoOpen: false })
+    const login = await run(test, ' login')
+    expect(login.kind).toBe('success')
+    expect(loginUrl(login).origin).toBe(origin)
+    expect(login.text).toContain(`ZenMux OAuth origin: ${origin}`)
+    expect(login.text).toContain(BROWSER_AUTO_OPEN_DISABLED_LINE)
+  })
+
   it('logs in through one validated loopback callback and stores a recoverable token set', async () => {
     const tokenRequests = mockOAuth([{
       access_token: 'access-one',

@@ -8,11 +8,13 @@
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
 /** Cordis plugin name. */
-export declare const name = "zenmux-oauth";
+export declare const name = "zenmux";
 /** Services required for login commands and durable token storage. */
 export declare const inject: string[];
 /** User-configurable ZenMux OAuth deployment values. */
 export interface Config {
+    /** ZenMux OAuth authorization-server origin. */
+    oauthOrigin: string;
     /** Registered ZenMux public OAuth client id. */
     clientId: string;
     /** OAuth scopes requested at interactive login. */
@@ -21,6 +23,8 @@ export interface Config {
     callbackPort: number;
     /** Optional HTTP(S) or SOCKS proxy URL for ZenMux discovery and token traffic. */
     proxyUrl: string;
+    /** Whether DSH Web should automatically open the authorization URL. */
+    browserAutoOpen: boolean;
     /** Credential reference exposed to LLM provider profiles. */
     accessTokenRef: string;
     /** Credential reference holding the complete versioned OAuth token set. */

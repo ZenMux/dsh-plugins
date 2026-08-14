@@ -45,8 +45,8 @@ function stubAgent(ctx: Context): Agent {
   }
 }
 
-describe('zenmux-oauth real composition', () => {
-  it('declares an external DSH bundle patch without deployment-specific config', async () => {
+describe('ZenMux real composition', () => {
+  it('declares the external DSH bundle, Anthropic cache/reasoning route, and no deployment proxy', async () => {
     const manifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
       name?: string
@@ -56,6 +56,15 @@ describe('zenmux-oauth real composition', () => {
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     const patch = await readFile(fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)), 'utf8')
     expect(patch).toContain("name: '@zenmux/dsh-plugins'")
+    expect(patch).toContain("id: llm-pi-ai")
+    expect(patch).toContain("apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN")
+    expect(patch).toContain("id: deepseek/deepseek-v4-flash")
+    expect(patch).toContain("'https://zenmux.ai/api/v1'")
+    expect(patch).toContain('api: anthropic-messages')
+    expect(patch).toContain('cacheRetention: short')
+    expect(patch).toContain('high: 10240')
+    expect(patch).toContain('reasoningEfforts:')
+    expect(patch).not.toContain('zenmux.dev')
     expect(patch).not.toContain('proxyUrl')
   })
 
@@ -74,7 +83,7 @@ describe('zenmux-oauth real composition', () => {
       '  config:',
       `    path: ${JSON.stringify(join(root, '.credentials.yaml'))}`,
       '    watch: false',
-      '- id: zenmux-oauth',
+      '- id: zenmux',
       "  name: '@zenmux/dsh-plugins'",
       '',
     ].join('\n'))

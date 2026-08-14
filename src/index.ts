@@ -18,24 +18,38 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
+import { BROWSER_AUTO_OPEN_DISABLED_LINE, OAUTH_ORIGIN_LINE_PREFIX } from './shared.js'
 // Side-effect type imports: declaration-merge the injected services onto Context.
 import type {} from '@deepseek-ai/dsh-commands'
 
 /** Cordis plugin name. */
-export const name = 'zenmux-oauth'
+export const name = 'zenmux'
 /** Services required for login commands and durable token storage. */
 export const inject = ['commands', 'credentials']
 
-const ISSUER = 'https://zenmux.ai'
-const METADATA_URL = `${ISSUER}/.well-known/oauth-authorization-server`
+const PRODUCTION_OAUTH_ORIGIN = 'https://zenmux.ai'
 const CALLBACK_HOST = '127.0.0.1'
 const CALLBACK_PATH = '/callback'
 const TOKEN_SET_VERSION = 1
 const MAX_WIRE_JSON_BYTES = 64 * 1024
 const DEFAULT_CLIENT_ID = 'zpc_TpZNdEix0d_c_bFrBrUzwXOp'
+const DEFAULT_SCOPES = ['inference:invoke', 'offline_access']
+
+/** Read one non-empty environment value before Cordis materializes defaults. */
+function envValue(name: string, fallback: string): string {
+  return process.env[name]?.trim() || fallback
+}
+
+/** Split the OAuth scope environment value on RFC-compatible ASCII whitespace. */
+function envScopes(): string[] {
+  const value = process.env.ZENMUX_OAUTH_SCOPES?.trim()
+  return value === undefined || value.length === 0 ? DEFAULT_SCOPES : value.split(/\s+/u)
+}
 
 /** User-configurable ZenMux OAuth deployment values. */
 export interface Config {
+  /** ZenMux OAuth authorization-server origin. */
+  oauthOrigin: string
   /** Registered ZenMux public OAuth client id. */
   clientId: string
   /** OAuth scopes requested at interactive login. */
@@ -44,6 +58,8 @@ export interface Config {
   callbackPort: number
   /** Optional HTTP(S) or SOCKS proxy URL for ZenMux discovery and token traffic. */
   proxyUrl: string
+  /** Whether DSH Web should automatically open the authorization URL. */
+  browserAutoOpen: boolean
   /** Credential reference exposed to LLM provider profiles. */
   accessTokenRef: string
   /** Credential reference holding the complete versioned OAuth token set. */
@@ -60,10 +76,12 @@ export interface Config {
 
 /** Validated Cordis configuration. */
 export const Config: z<Config> = z.object({
-  clientId: z.string().pattern(/^[A-Za-z0-9._~-]+$/u).default(DEFAULT_CLIENT_ID),
-  scopes: z.array(String).default(['inference:invoke', 'offline_access']),
+  oauthOrigin: z.string().default(envValue('ZENMUX_OAUTH_ORIGIN', PRODUCTION_OAUTH_ORIGIN)),
+  clientId: z.string().pattern(/^[A-Za-z0-9._~-]+$/u).default(envValue('ZENMUX_OAUTH_CLIENT_ID', DEFAULT_CLIENT_ID)),
+  scopes: z.array(String).default(envScopes()),
   callbackPort: z.number().step(1).min(0).max(65_535).default(0),
   proxyUrl: z.string().default(''),
+  browserAutoOpen: z.boolean().default(process.env.ZENMUX_OAUTH_NO_BROWSER !== '1'),
   accessTokenRef: z.string().role('credential-ref').default('ZENMUX_OAUTH_ACCESS_TOKEN'),
   tokenSetRef: z.string().role('credential-ref').default('ZENMUX_OAUTH_TOKENS'),
   loginTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(5 * 60_000),
@@ -112,28 +130,39 @@ interface TokenResponse {
 
 /** Resolve and judge config facts that depend on more than one schema field. */
 function resolveConfig(config: Config): ResolvedConfig {
+  const oauthUrl = new URL(config.oauthOrigin)
+  const isLoopbackHttp = oauthUrl.protocol === 'http:'
+    && (oauthUrl.hostname === '127.0.0.1' || oauthUrl.hostname === 'localhost' || oauthUrl.hostname === '[::1]')
+  if ((oauthUrl.protocol !== 'https:' && !isLoopbackHttp)
+    || oauthUrl.pathname !== '/'
+    || oauthUrl.search.length > 0
+    || oauthUrl.hash.length > 0) {
+    throw new Error('zenmux: oauthOrigin must be an HTTPS origin (or loopback HTTP for development)')
+  }
   const accessTokenRef = credentialRef(config.accessTokenRef)
   const tokenSetRef = credentialRef(config.tokenSetRef)
   if (accessTokenRef === tokenSetRef) {
-    throw new Error('zenmux-oauth: accessTokenRef and tokenSetRef must be different credential references')
+    throw new Error('zenmux: accessTokenRef and tokenSetRef must be different credential references')
   }
   const scopes = [...new Set(config.scopes)]
   if (!scopes.includes('inference:invoke')) {
-    throw new Error('zenmux-oauth: scopes must include "inference:invoke"')
+    throw new Error('zenmux: scopes must include "inference:invoke"')
   }
   if (!scopes.includes('offline_access')) {
-    throw new Error('zenmux-oauth: scopes must include "offline_access" so the login can refresh')
+    throw new Error('zenmux: scopes must include "offline_access" so the login can refresh')
   }
   for (const scope of scopes) {
     if (!/^[\x21-\x7E]+$/u.test(scope)) {
-      throw new Error(`zenmux-oauth: invalid OAuth scope ${JSON.stringify(scope)}`)
+      throw new Error(`zenmux: invalid OAuth scope ${JSON.stringify(scope)}`)
     }
   }
   return Object.freeze({
+    oauthOrigin: oauthUrl.origin,
     clientId: config.clientId,
     scopes,
     callbackPort: config.callbackPort,
     proxyUrl: config.proxyUrl.trim() || process.env.HTTPS_PROXY?.trim() || process.env.https_proxy?.trim() || '',
+    browserAutoOpen: config.browserAutoOpen,
     accessTokenRef,
     tokenSetRef,
     loginTimeoutMs: config.loginTimeoutMs,
@@ -166,7 +195,7 @@ function createProxyAgent(proxyUrl: string): HttpsProxyAgent<string> | SocksProx
   if (parsed.protocol === 'socks4a:' || parsed.protocol === 'socks5h:') {
     return new SocksProxyAgent(parsed)
   }
-  throw new Error('zenmux-oauth: proxyUrl must use http://, https://, socks4a://, or socks5h://')
+  throw new Error('zenmux: proxyUrl must use http://, https://, socks4a://, or socks5h://')
 }
 
 /** Require one non-empty string field from untrusted JSON. */
@@ -203,9 +232,9 @@ function oauthError(record: Record<string, unknown>, fallback: string): Error {
 }
 
 /** Validate authorization-server metadata and keep credentials on the ZenMux origin. */
-function parseMetadata(record: Record<string, unknown>): OAuthMetadata {
-  if (stringField(record, 'issuer') !== ISSUER) {
-    throw new Error(`ZenMux OAuth metadata issuer must be ${ISSUER}`)
+function parseMetadata(record: Record<string, unknown>, expectedOrigin: string): OAuthMetadata {
+  if (stringField(record, 'issuer') !== expectedOrigin) {
+    throw new Error(`ZenMux OAuth metadata issuer must be ${expectedOrigin}`)
   }
   const challengeMethods = record.code_challenge_methods_supported
   if (!Array.isArray(challengeMethods) || !challengeMethods.includes('S256')) {
@@ -222,13 +251,13 @@ function parseMetadata(record: Record<string, unknown>): OAuthMetadata {
   const sameOriginEndpoint = (field: string): string => {
     const value = stringField(record, field)
     const url = new URL(value)
-    if (url.protocol !== 'https:' || url.origin !== ISSUER) {
-      throw new Error(`ZenMux OAuth metadata field "${field}" must use the ${ISSUER} origin`)
+    if (url.origin !== expectedOrigin) {
+      throw new Error(`ZenMux OAuth metadata field "${field}" must use the ${expectedOrigin} origin`)
     }
     return url.href
   }
   return Object.freeze({
-    issuer: ISSUER,
+    issuer: expectedOrigin,
     authorizationEndpoint: sameOriginEndpoint('authorization_endpoint'),
     tokenEndpoint: sameOriginEndpoint('token_endpoint'),
     revocationEndpoint: sameOriginEndpoint('revocation_endpoint'),
@@ -350,7 +379,14 @@ class ZenMuxOAuthController {
         const url = await this.beginLogin()
         return {
           kind: 'success',
-          text: `Open this URL to sign in to ZenMux:\n${url}\n\nThen run /zenmux status after the browser reports success.`,
+          text: [
+            'Open this URL to sign in to ZenMux:',
+            `${OAUTH_ORIGIN_LINE_PREFIX}${this.config.oauthOrigin}`,
+            url,
+            '',
+            'Then run /zenmux status after the browser reports success.',
+            ...this.config.browserAutoOpen ? [] : [BROWSER_AUTO_OPEN_DISABLED_LINE],
+          ].join('\n'),
         }
       } catch (error) {
         return { kind: 'error', text: error instanceof Error ? error.message : 'ZenMux OAuth login failed.' }
@@ -369,7 +405,7 @@ class ZenMuxOAuthController {
 
   /** Stop admission, close the loopback listener, abort I/O, and await token mutations. */
   async dispose(): Promise<void> {
-    this.lifetime.abort(new Error('zenmux-oauth disposed'))
+    this.lifetime.abort(new Error('zenmux disposed'))
     if (this.refreshTimer !== undefined) clearTimeout(this.refreshTimer)
     this.refreshTimer = undefined
     await this.stopPending()
@@ -398,7 +434,7 @@ class ZenMuxOAuthController {
     const state = randomBase64Url(32)
     const server = createServer((request, response) => {
       void this.handleCallback(request, response).catch(() => {
-        this.ctx.logger.warn('zenmux-oauth: loopback callback handler failed')
+        this.ctx.logger.warn('zenmux: loopback callback handler failed')
         if (response.headersSent) response.destroy()
         else callbackPage(response, 500, 'ZenMux login failed', 'The local callback failed. Return to DeepSeek Harness and try again.')
       })
@@ -421,7 +457,7 @@ class ZenMuxOAuthController {
       await new Promise<void>(resolve => server.close(() => {
         resolve()
       }))
-      throw new Error('zenmux-oauth: loopback callback server did not publish an address')
+      throw new Error('zenmux: loopback callback server did not publish an address')
     }
     const redirectUri = `http://${CALLBACK_HOST}:${address.port}${CALLBACK_PATH}`
     const authorization = new URL(metadata.authorizationEndpoint)
@@ -489,7 +525,7 @@ class ZenMuxOAuthController {
       })
       callbackPage(response, 200, 'ZenMux connected', 'Login succeeded. You may close this tab and return to DeepSeek Harness.')
     } catch {
-      this.ctx.logger.warn('zenmux-oauth: authorization-code exchange failed')
+      this.ctx.logger.warn('zenmux: authorization-code exchange failed')
       callbackPage(response, 502, 'ZenMux login failed', 'The authorization code could not be exchanged. Return to DeepSeek Harness and try again.')
     }
   }
@@ -497,10 +533,10 @@ class ZenMuxOAuthController {
   /** Fetch and cache validated ZenMux authorization-server metadata. */
   private async metadata(): Promise<OAuthMetadata> {
     if (this.metadataValue !== undefined) return this.metadataValue
-    const response = await this.fetch(METADATA_URL)
+    const response = await this.fetch(`${this.config.oauthOrigin}/.well-known/oauth-authorization-server`)
     const record = parseJsonObject(await response.text(), 'ZenMux OAuth metadata')
     if (!response.ok) throw oauthError(record, `ZenMux OAuth metadata request failed with HTTP ${response.status}`)
-    this.metadataValue = parseMetadata(record)
+    this.metadataValue = parseMetadata(record, this.config.oauthOrigin)
     return this.metadataValue
   }
 
@@ -586,7 +622,7 @@ class ZenMuxOAuthController {
   /** Retry a failed refresh until success, logout, or plugin disposal. */
   private scheduleRefreshRetry(): void {
     if (this.lifetime.signal.aborted || this.tokenSet === undefined) return
-    this.ctx.logger.warn('zenmux-oauth: background token refresh failed; retrying in %d ms', this.config.refreshRetryMs)
+    this.ctx.logger.warn('zenmux: background token refresh failed; retrying in %d ms', this.config.refreshRetryMs)
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = undefined
       void this.enqueue(() => this.refresh()).catch(() => {
@@ -690,7 +726,7 @@ class ZenMuxOAuthController {
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new ZenMuxOAuthController(ctx, resolveConfig(config))
   await controller.start()
-  ctx.effect(() => () => controller.dispose(), 'zenmux-oauth.lifecycle')
+  ctx.effect(() => () => controller.dispose(), 'zenmux.lifecycle')
   ctx.commands.register({
     name: 'zenmux',
     description: 'sign in to ZenMux with OAuth PKCE or view its authentication status',

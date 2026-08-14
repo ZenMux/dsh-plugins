@@ -10,7 +10,7 @@ import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 const PACKAGE_NAME = '@zenmux/dsh-plugins'
 
 /** Cordis companion plugin name. */
-export const name = 'zenmux-oauth-invariant'
+export const name = 'zenmux-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 
