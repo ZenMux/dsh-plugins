@@ -16,6 +16,7 @@ import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 // Side-effect type imports: declaration-merge the injected services onto Context.
 import type {} from '@deepseek-ai/dsh-commands'
@@ -41,7 +42,7 @@ export interface Config {
   scopes: string[]
   /** Loopback callback port; zero asks the OS for a free port. */
   callbackPort: number
-  /** Optional SOCKS proxy URL for ZenMux discovery and token traffic. */
+  /** Optional HTTP(S) or SOCKS proxy URL for ZenMux discovery and token traffic. */
   proxyUrl: string
   /** Credential reference exposed to LLM provider profiles. */
   accessTokenRef: string
@@ -132,7 +133,7 @@ function resolveConfig(config: Config): ResolvedConfig {
     clientId: config.clientId,
     scopes,
     callbackPort: config.callbackPort,
-    proxyUrl: config.proxyUrl,
+    proxyUrl: config.proxyUrl.trim() || process.env.HTTPS_PROXY?.trim() || process.env.https_proxy?.trim() || '',
     accessTokenRef,
     tokenSetRef,
     loginTimeoutMs: config.loginTimeoutMs,
@@ -155,14 +156,17 @@ interface OAuthRequestInit {
   readonly body: URLSearchParams
 }
 
-/** Accept only remote-DNS SOCKS schemes so the proxy owns ZenMux resolution. */
-function createProxyAgent(proxyUrl: string): SocksProxyAgent | undefined {
+/** Create the explicitly configured or environment-inherited OAuth proxy transport. */
+function createProxyAgent(proxyUrl: string): HttpsProxyAgent<string> | SocksProxyAgent | undefined {
   if (proxyUrl.length === 0) return undefined
   const parsed = new URL(proxyUrl)
-  if (parsed.protocol !== 'socks4a:' && parsed.protocol !== 'socks5h:') {
-    throw new Error('zenmux-oauth: proxyUrl must use socks4a:// or socks5h:// so DNS is resolved by the proxy')
+  if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+    return new HttpsProxyAgent(parsed)
   }
-  return new SocksProxyAgent(parsed)
+  if (parsed.protocol === 'socks4a:' || parsed.protocol === 'socks5h:') {
+    return new SocksProxyAgent(parsed)
+  }
+  throw new Error('zenmux-oauth: proxyUrl must use http://, https://, socks4a://, or socks5h://')
 }
 
 /** Require one non-empty string field from untrusted JSON. */
@@ -316,7 +320,7 @@ function callbackPage(response: ServerResponse, status: number, title: string, m
 /** One plugin instance's login, persistence, refresh, and disposal lifecycle. */
 class ZenMuxOAuthController {
   private readonly lifetime = new AbortController()
-  private readonly proxyAgent: SocksProxyAgent | undefined
+  private readonly proxyAgent: HttpsProxyAgent<string> | SocksProxyAgent | undefined
   private metadataValue: OAuthMetadata | undefined
   private pending: PendingLogin | undefined
   private refreshTimer: NodeJS.Timeout | undefined

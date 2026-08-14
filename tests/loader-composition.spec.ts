@@ -46,7 +46,7 @@ function stubAgent(ctx: Context): Agent {
 }
 
 describe('zenmux-oauth real composition', () => {
-  it('declares an external DSH bundle patch that mounts the SOCKS-routed plugin', async () => {
+  it('declares an external DSH bundle patch without deployment-specific config', async () => {
     const manifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
       name?: string
@@ -56,7 +56,7 @@ describe('zenmux-oauth real composition', () => {
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     const patch = await readFile(fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)), 'utf8')
     expect(patch).toContain("name: '@zenmux/dsh-plugins'")
-    expect(patch).toContain("proxyUrl: 'socks5h://127.0.0.1:1080'")
+    expect(patch).not.toContain('proxyUrl')
   })
 
   it('boots through Loader + Include and publishes the human command', async () => {

@@ -15,7 +15,7 @@ dsh web
 
 npm 包发布后可以这样安装：`dsh plugin --profile web add @zenmux/dsh-plugins`。
 
-这个包声明了 `dsh.bundle.patch`，所以插件管理器会自动加入它的 `cordis.patch.yml`。该 patch 挂载一个默认空闲的控制器，并把 `proxyUrl` 设为 `socks5h://127.0.0.1:1080`。安装此包不会修改 DSH 内置的 base bundle。
+这个包声明了 `dsh.bundle.patch`，所以插件管理器会自动加入它的 `cordis.patch.yml`。该 patch 只挂载一个默认空闲的控制器。安装此包不会修改 DSH 内置的 base bundle，也不会注入部署环境相关配置。
 
 ## 登录
 
@@ -23,7 +23,7 @@ npm 包发布后可以这样安装：`dsh plugin --profile web add @zenmux/dsh-p
 
 随附的 public client 使用已登记的 `http://127.0.0.1:<临时端口>/callback` 回调并请求 `inference:invoke offline_access`。监听器拒绝其他路径、不匹配的 state、重复回调和超过 `loginTimeoutMs` 的回调；它只绑定 loopback，并在接受一个响应或超时后关闭。
 
-安装后的插件 bundle 会让 ZenMux discovery、token 与 revocation 请求通过 `socks5h://127.0.0.1:1080`；其中 `h` 形式确保 DNS 也在代理端解析。浏览器流量也必须通过浏览器或系统代理走同一路径。如果该路径使用本地 CA 终止 TLS，请在 Node 启动前加入 CA，例如 `NODE_EXTRA_CA_CERTS=/绝对路径/ca.pem dsh web`。不要使用 `NODE_TLS_REJECT_UNAUTHORIZED=0`：关闭校验会暴露 authorization code 与 refresh token。
+ZenMux discovery、token 与 revocation 请求默认直连。确实需要代理的部署，可以在自己的 DSH profile 中显式设置 `proxyUrl`，或导出 `HTTPS_PROXY`/`https_proxy`；插件配置优先。支持 HTTP、HTTPS 与远端 DNS SOCKS 代理 URL。浏览器需要独立访问同一个授权服务。如果配置的链路使用本地 CA 终止 TLS，请在 Node 启动前加入 CA，例如 `NODE_EXTRA_CA_CERTS=/绝对路径/ca.pem dsh web`。不要使用 `NODE_TLS_REJECT_UNAUTHORIZED=0`：关闭校验会暴露 authorization code 与 refresh token。
 
 ## LLM 提供方配置
 
@@ -51,7 +51,7 @@ Models 页面也可以创建同样的 profile。让 `apiKeyEnv` 指向配置的 
 | `clientId` | ZenMux Harness public client | 已登记的 public OAuth client id |
 | `scopes` | `inference:invoke`、`offline_access` | 必需的推理与刷新 scope |
 | `callbackPort` | `0` | loopback 端口；零表示由操作系统选择空闲端口 |
-| `proxyUrl` | 空 | 可选的 `socks4a://` 或 `socks5h://` 代理；插件 bundle 设置为 `socks5h://127.0.0.1:1080` |
+| `proxyUrl` | 空 | 部署方可提供 `http://`、`https://`、`socks4a://` 或 `socks5h://` 代理；未提供时继承 `HTTPS_PROXY`/`https_proxy`，再无则直连 |
 | `accessTokenRef` | `ZENMUX_OAUTH_ACCESS_TOKEN` | LLM 提供方读取的原始 access token 镜像 |
 | `tokenSetRef` | `ZENMUX_OAUTH_TOKENS` | 带版本的 JSON access/refresh token 集合 |
 | `loginTimeoutMs` | `300000` | 待完成 loopback 登录的存活时间 |

@@ -1,7 +1,7 @@
 {
   "name": "@zenmux/dsh-plugins",
   "description": "ZenMux OAuth 2.0 PKCE login, token refresh, and Harness credential mirroring",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "type": "module",
   "license": "MIT",
@@ -54,6 +54,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "^3.18.1",
+    "https-proxy-agent": "^9.1.0",
     "socks-proxy-agent": "^10.1.0"
   },
   "devDependencies": {

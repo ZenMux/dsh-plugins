@@ -19,7 +19,7 @@ export interface Config {
     scopes: string[];
     /** Loopback callback port; zero asks the OS for a free port. */
     callbackPort: number;
-    /** Optional SOCKS proxy URL for ZenMux discovery and token traffic. */
+    /** Optional HTTP(S) or SOCKS proxy URL for ZenMux discovery and token traffic. */
     proxyUrl: string;
     /** Credential reference exposed to LLM provider profiles. */
     accessTokenRef: string;
