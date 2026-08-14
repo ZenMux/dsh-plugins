@@ -23,7 +23,7 @@ The host command returns a ZenMux authorization URL, but DSH Web may not surface
 - `tsdown.config.ts`: emits the DSH client-module wrapper at `lib/client.js`.
 - `package.json`: declares the `./client` export and `dsh.client` dependency graph.
 - `tests/client.spec.ts`: validates URL boundaries and popup arguments.
-- `cordis.patch.yml`: names the plugin `zenmux` and supplies one Anthropic Messages ZenMux model through DSH's existing pi-ai adapter.
+- `cordis.patch.yml`: names the plugin `zenmux` and supplies DeepSeek V4 Pro and V4 Flash through DSH's existing Anthropic Messages pi-ai adapter.
 - `src/shared.ts`: browser auto-open and trusted-origin result markers shared by host/client halves.
 
 The host command includes its validated OAuth origin beside the authorization URL. The client observes the local `command/executed` acknowledgment and accepts only a successful HTTPS URL (or loopback HTTP development URL) whose origin exactly matches that marker. `ZENMUX_OAUTH_NO_BROWSER=1` adds an exact marker that suppresses auto-open while retaining the manual link.
@@ -46,7 +46,7 @@ The host command includes its validated OAuth origin beside the authorization UR
 
 Run unit, loader-composition, package, and browser tests locally. Install the packed artifact into a local DSH Web profile, restart DSH, confirm the client bundle appears in `window.__DSH_BOOT__`, execute `/zenmux login`, and verify a ZenMux authorization tab plus the manual-link fallback before committing or publishing.
 
-Release this host/client and provider-composition change as `0.1.3` only after the packed local artifact completes a real Anthropic Messages ZenMux request with a selectable reasoning level. Any alternate inference host used for local reachability testing belongs only in the local profile overlay and must not enter the package bundle or documentation.
+Release the two-model provider update as `0.1.4` only after the packed local artifact exposes both models and completes a real Anthropic Messages request through each one with a selectable reasoning level. Any alternate inference host used for local reachability testing belongs only in the local profile overlay and must not enter the package bundle or documentation.
 
 ## Compatibility and open questions
 

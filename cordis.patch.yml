@@ -21,6 +21,16 @@
           medium: 5120
           high: 10240
         models:
+          - id: deepseek/deepseek-v4-pro
+            name: ZenMux · DeepSeek V4 Pro
+            contextWindow: 1000000
+            maxTokens: 32768
+            reasoningEfforts:
+              'off': null
+              minimal: minimal
+              low: low
+              medium: medium
+              high: high
           - id: deepseek/deepseek-v4-flash
             name: ZenMux · DeepSeek V4 Flash
             contextWindow: 1000000

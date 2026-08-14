@@ -44,6 +44,14 @@ llm-pi-ai:
         medium: 5120
         high: 10240
       models:
+        - id: deepseek/deepseek-v4-pro
+          name: ZenMux · DeepSeek V4 Pro
+          reasoningEfforts:
+            off: null
+            minimal: minimal
+            low: low
+            medium: medium
+            high: high
         - id: deepseek/deepseek-v4-flash
           name: ZenMux · DeepSeek V4 Flash
           reasoningEfforts:
@@ -54,9 +62,9 @@ llm-pi-ai:
             high: high
 ```
 
-After login, select **ZenMux · DeepSeek V4 Flash** in the model selector. This route deliberately prefers Anthropic Messages so DSH/pi-ai can apply native Anthropic prompt caching and thinking budgets. DSH's default remains the official DeepSeek route, so an existing conversation does not silently change providers. If `accessTokenRef` is customized, apply that same reference to `llm-pi-ai.providers.zenmux.apiKeyEnv`; do not paste an OAuth token into the model form.
+After login, select **ZenMux · DeepSeek V4 Pro** or **ZenMux · DeepSeek V4 Flash** in the model selector. This route deliberately prefers Anthropic Messages so DSH/pi-ai can apply native Anthropic prompt caching and thinking budgets. DSH's default remains the official DeepSeek route, so an existing conversation does not silently change providers. If `accessTokenRef` is customized, apply that same reference to `llm-pi-ai.providers.zenmux.apiKeyEnv`; do not paste an OAuth token into the model form.
 
-The bundled model is only a safe starting entry. In **Settings → Models**, the ZenMux provider's `models` array can be replaced, edited, or extended with any ZenMux model IDs and their capacities/reasoning levels. Current DSH automatic model discovery supports OpenAI-compatible `/models` routes but not `anthropic-messages`, so this Anthropic-first route uses manual model entries rather than presenting a broken refresh action.
+The bundled models are safe starting entries. In **Settings → Models**, the ZenMux provider's `models` array can be replaced, edited, or extended with any ZenMux model IDs and their capacities/reasoning levels. Current DSH automatic model discovery supports OpenAI-compatible `/models` routes but not `anthropic-messages`, so this Anthropic-first route uses manual model entries rather than presenting a broken refresh action.
 
 ## Configuration
 
@@ -115,6 +123,6 @@ The bundled Anthropic route requests `cacheRetention: short`. DSH/pi-ai adds Ant
 
 ## Known Limitations and Deferred Work
 
-- **One bundled model entry** — the package currently declares `deepseek/deepseek-v4-flash`; users can replace the `models` array in DSH Settings, but automatic discovery is unavailable on the Anthropic protocol today.
+- **Two bundled model entries** — the package declares `deepseek/deepseek-v4-pro` and `deepseek/deepseek-v4-flash`; users can replace the `models` array in DSH Settings, but automatic discovery is unavailable on the Anthropic protocol today.
 - **Interactive command adapters only** — the shipped Web app can run `/zenmux`; headless and automation deployments that do not consume `ctx.commands` cannot initiate browser login, though they can use a token set created by another interactive run over the same Harness home.
 - **Proxy availability is deployment-owned** — login and refresh fail closed when the configured SOCKS proxy is unavailable; the plugin does not silently fall back to a direct connection.

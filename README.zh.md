@@ -44,6 +44,14 @@ llm-pi-ai:
         medium: 5120
         high: 10240
       models:
+        - id: deepseek/deepseek-v4-pro
+          name: ZenMux · DeepSeek V4 Pro
+          reasoningEfforts:
+            off: null
+            minimal: minimal
+            low: low
+            medium: medium
+            high: high
         - id: deepseek/deepseek-v4-flash
           name: ZenMux · DeepSeek V4 Flash
           reasoningEfforts:
@@ -54,7 +62,7 @@ llm-pi-ai:
             high: high
 ```
 
-登录后，在模型选择器中选择 **ZenMux · DeepSeek V4 Flash**。这条路由优先使用 Anthropic Messages，让 DSH/pi-ai 原生处理 Anthropic 提示词缓存与思考预算。DSH 默认仍是官方 DeepSeek 路由，因此已有对话不会被静默切换提供方。如果自定义了 `accessTokenRef`，需要同时把 `llm-pi-ai.providers.zenmux.apiKeyEnv` 改成同一个引用；不要把 OAuth token 粘贴到模型表单。
+登录后，在模型选择器中选择 **ZenMux · DeepSeek V4 Pro** 或 **ZenMux · DeepSeek V4 Flash**。这条路由优先使用 Anthropic Messages，让 DSH/pi-ai 原生处理 Anthropic 提示词缓存与思考预算。DSH 默认仍是官方 DeepSeek 路由，因此已有对话不会被静默切换提供方。如果自定义了 `accessTokenRef`，需要同时把 `llm-pi-ai.providers.zenmux.apiKeyEnv` 改成同一个引用；不要把 OAuth token 粘贴到模型表单。
 
 随包模型只是可用的初始条目。在 **设置 → 模型** 中，可以用任意 ZenMux 模型 ID 替换、编辑或扩展该提供方的 `models` 数组，并配置容量和推理等级。当前 DSH 自动模型发现支持 OpenAI 兼容的 `/models` 路由，但不支持 `anthropic-messages`，所以 Anthropic 优先路由采用手工模型条目，不展示一个实际不可用的刷新能力。
 
@@ -115,6 +123,6 @@ llm-pi-ai:
 
 ## 已知限制与暂缓事项
 
-- **随包只声明一个模型**——当前只声明 `deepseek/deepseek-v4-flash`；用户可在 DSH 设置中替换 `models` 数组，但 Anthropic 协议目前没有自动发现能力。
+- **随包声明两个模型**——当前声明 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-v4-flash`；用户可在 DSH 设置中替换 `models` 数组，但 Anthropic 协议目前没有自动发现能力。
 - **仅限交互式命令适配器**——随附 Web 应用可以运行 `/zenmux`；不消费 `ctx.commands` 的 headless 与自动化部署无法发起浏览器登录，但可使用另一次交互运行在同一 Harness home 中创建的 token 集合。
 - **代理可用性由部署负责**——配置的 SOCKS 代理不可用时，登录与刷新会以失败关闭；插件不会悄悄回退到直连。
