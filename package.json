@@ -1,7 +1,7 @@
 {
-  "name": "dsh-zenmux-oauth",
+  "name": "@zenmux/dsh-plugins",
   "description": "ZenMux OAuth 2.0 PKCE login, token refresh, and Harness credential mirroring",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "license": "MIT",
@@ -14,7 +14,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ilimei/dsh-zenmux-oauth.git"
+    "url": "git+https://github.com/ZenMux/dsh-plugins.git"
   },
   "main": "lib/index.js",
   "types": "lib/index.d.ts",

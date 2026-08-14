@@ -1,13 +1,13 @@
 /**
- * Package-owned invariant companion for `dsh-zenmux-oauth`.
- * @module dsh-zenmux-oauth/invariant
+ * Package-owned invariant companion for `@zenmux/dsh-plugins`.
+ * @module @zenmux/dsh-plugins/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = 'dsh-zenmux-oauth'
+const PACKAGE_NAME = '@zenmux/dsh-plugins'
 
 /** Cordis companion plugin name. */
 export const name = 'zenmux-oauth-invariant'

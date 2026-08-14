@@ -10,7 +10,7 @@ import CommandRuntime from '@deepseek-ai/dsh-commands'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import * as zenmuxOAuth from 'dsh-zenmux-oauth'
+import * as zenmuxOAuth from '@zenmux/dsh-plugins'
 
 const ACCESS_REF = credentialRef('DSH_TEST_ZENMUX_OAUTH_ACCESS')
 const TOKENS_REF = credentialRef('DSH_TEST_ZENMUX_OAUTH_TOKENS')

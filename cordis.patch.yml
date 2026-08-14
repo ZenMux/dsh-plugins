@@ -3,6 +3,6 @@
 # provider request starts until /zenmux login or stored-token recovery.
 - insert:
     - id: zenmux-oauth
-      name: 'dsh-zenmux-oauth'
+      name: '@zenmux/dsh-plugins'
       config:
         proxyUrl: 'socks5h://127.0.0.1:1080'
