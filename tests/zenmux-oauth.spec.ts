@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { get } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
@@ -27,7 +27,13 @@ const METADATA = {
 let root: string | undefined
 let context: Context | undefined
 
+beforeEach(() => {
+  vi.stubEnv('HTTPS_PROXY', '')
+  vi.stubEnv('https_proxy', '')
+})
+
 afterEach(async () => {
+  vi.unstubAllEnvs()
   vi.unstubAllGlobals()
   await context?.fiber.dispose()
   context = undefined
@@ -164,8 +170,15 @@ describe('dsh-zenmux-oauth registration', () => {
   })
 
   it('requires remote DNS resolution for an explicit SOCKS route', async () => {
-    await expect(harness(undefined, 'socks5://127.0.0.1:1080')).rejects.toThrow(
-      'proxyUrl must use socks4a:// or socks5h://',
+    await expect(harness(undefined, 'socks5://proxy.example.test:9999')).rejects.toThrow(
+      'proxyUrl must use http://, https://, socks4a://, or socks5h://',
+    )
+  })
+
+  it('inherits HTTPS_PROXY when proxyUrl is empty', async () => {
+    vi.stubEnv('HTTPS_PROXY', 'ftp://proxy.example.test')
+    await expect(harness()).rejects.toThrow(
+      'proxyUrl must use http://, https://, socks4a://, or socks5h://',
     )
   })
 })

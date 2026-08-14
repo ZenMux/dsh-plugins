@@ -4,5 +4,3 @@
 - insert:
     - id: zenmux-oauth
       name: '@zenmux/dsh-plugins'
-      config:
-        proxyUrl: 'socks5h://127.0.0.1:1080'

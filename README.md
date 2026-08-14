@@ -15,7 +15,7 @@ dsh web
 
 The published npm package can be installed with: `dsh plugin --profile web add @zenmux/dsh-plugins`.
 
-The package declares `dsh.bundle.patch`, so the plugin manager adds its `cordis.patch.yml` automatically. That patch mounts an otherwise idle controller and sets `proxyUrl` to `socks5h://127.0.0.1:1080`. Installing the package does not modify DSH's built-in base bundle.
+The package declares `dsh.bundle.patch`, so the plugin manager adds its `cordis.patch.yml` automatically. That patch only mounts an otherwise idle controller. Installing the package does not modify DSH's built-in base bundle or inject deployment-specific configuration.
 
 ## Login
 
@@ -23,7 +23,7 @@ Run `/zenmux login`, open the returned ZenMux URL, approve access, and return af
 
 The bundled public client uses the registered callback `http://127.0.0.1:<ephemeral-port>/callback` and requests `inference:invoke offline_access`. The listener rejects other paths, mismatched state, duplicate callbacks, and callbacks after `loginTimeoutMs`; it binds only to loopback and closes after one accepted response or timeout.
 
-The installed plugin bundle routes ZenMux discovery, token, and revocation requests through `socks5h://127.0.0.1:1080`; the `h` form keeps DNS resolution on the proxy side. Browser traffic must use the same route through the browser or system proxy. If that route terminates TLS with a local CA, add the CA before Node starts, for example `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem dsh web`. Do not use `NODE_TLS_REJECT_UNAUTHORIZED=0`: disabling verification would expose authorization codes and refresh tokens.
+ZenMux discovery, token, and revocation requests connect directly by default. Deployments that require a proxy may set `proxyUrl` explicitly in their DSH profile or export `HTTPS_PROXY`/`https_proxy`; explicit plugin config takes priority. HTTP, HTTPS, and remote-DNS SOCKS proxy URLs are accepted. Browser traffic must be able to reach the same authorization service independently. If the configured route terminates TLS with a local CA, add the CA before Node starts, for example `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem dsh web`. Do not use `NODE_TLS_REJECT_UNAUTHORIZED=0`: disabling verification would expose authorization codes and refresh tokens.
 
 ## LLM provider configuration
 
@@ -51,7 +51,7 @@ The Models page may create the same profile. Keep `apiKeyEnv` set to the configu
 | `clientId` | ZenMux Harness public client | Registered public OAuth client id |
 | `scopes` | `inference:invoke`, `offline_access` | Required inference and refresh scopes |
 | `callbackPort` | `0` | Loopback port; zero selects a free OS port |
-| `proxyUrl` | empty | Optional `socks4a://` or `socks5h://` proxy; the plugin bundle sets `socks5h://127.0.0.1:1080` |
+| `proxyUrl` | empty | Optional deployment-supplied `http://`, `https://`, `socks4a://`, or `socks5h://` proxy; otherwise inherits `HTTPS_PROXY`/`https_proxy`, then connects directly |
 | `accessTokenRef` | `ZENMUX_OAUTH_ACCESS_TOKEN` | Raw access-token mirror read by the LLM provider |
 | `tokenSetRef` | `ZENMUX_OAUTH_TOKENS` | Versioned JSON access/refresh token set |
 | `loginTimeoutMs` | `300000` | Pending loopback-login lifetime |
