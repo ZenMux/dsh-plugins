@@ -38,7 +38,6 @@
     "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\"",
     "build": "tsc -p tsconfig.json",
     "test": "pnpm run build && vitest run",
-    "prepare": "pnpm run build",
     "prepack": "pnpm run clean && pnpm run build"
   },
   "dsh": {
