@@ -1,4 +1,4 @@
-# dsh-zenmux-oauth
+# @zenmux/dsh-plugins
 
 English | [中文](README.zh.md)
 
@@ -9,11 +9,11 @@ ZenMux OAuth 2.0 Authorization Code login with PKCE S256 for interactive Harness
 Install the bundle from GitHub into the published DSH Web profile, then start DSH normally:
 
 ```sh
-dsh plugin --profile web add github:ilimei/dsh-zenmux-oauth
+dsh plugin --profile web add github:ZenMux/dsh-plugins
 dsh web
 ```
 
-After the package is published to npm, the shorter package spec will also work: `dsh plugin --profile web add dsh-zenmux-oauth`.
+The published npm package can be installed with: `dsh plugin --profile web add @zenmux/dsh-plugins`.
 
 The package declares `dsh.bundle.patch`, so the plugin manager adds its `cordis.patch.yml` automatically. That patch mounts an otherwise idle controller and sets `proxyUrl` to `socks5h://127.0.0.1:1080`. Installing the package does not modify DSH's built-in base bundle.
 

@@ -1,4 +1,4 @@
-# dsh-zenmux-oauth
+# @zenmux/dsh-plugins
 
 [English](README.md) | 中文
 
@@ -9,11 +9,11 @@
 从 GitHub 把 bundle 安装到已发布 DSH 的 Web profile，然后照常启动：
 
 ```sh
-dsh plugin --profile web add github:ilimei/dsh-zenmux-oauth
+dsh plugin --profile web add github:ZenMux/dsh-plugins
 dsh web
 ```
 
-包发布到 npm 后，也可以使用更短的包名：`dsh plugin --profile web add dsh-zenmux-oauth`。
+npm 包发布后可以这样安装：`dsh plugin --profile web add @zenmux/dsh-plugins`。
 
 这个包声明了 `dsh.bundle.patch`，所以插件管理器会自动加入它的 `cordis.patch.yml`。该 patch 挂载一个默认空闲的控制器，并把 `proxyUrl` 设为 `socks5h://127.0.0.1:1080`。安装此包不会修改 DSH 内置的 base bundle。
 

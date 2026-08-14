@@ -11,7 +11,7 @@ import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import * as zenmuxOAuth from 'dsh-zenmux-oauth'
+import * as zenmuxOAuth from '@zenmux/dsh-plugins'
 
 let root: string | undefined
 let context: Context | undefined
@@ -52,10 +52,10 @@ describe('zenmux-oauth real composition', () => {
       name?: string
       dsh?: { bundle?: { patch?: string } }
     }
-    expect(manifest.name).toBe('dsh-zenmux-oauth')
+    expect(manifest.name).toBe('@zenmux/dsh-plugins')
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     const patch = await readFile(fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)), 'utf8')
-    expect(patch).toContain("name: 'dsh-zenmux-oauth'")
+    expect(patch).toContain("name: '@zenmux/dsh-plugins'")
     expect(patch).toContain("proxyUrl: 'socks5h://127.0.0.1:1080'")
   })
 
@@ -75,7 +75,7 @@ describe('zenmux-oauth real composition', () => {
       `    path: ${JSON.stringify(join(root, '.credentials.yaml'))}`,
       '    watch: false',
       '- id: zenmux-oauth',
-      "  name: 'dsh-zenmux-oauth'",
+      "  name: '@zenmux/dsh-plugins'",
       '',
     ].join('\n'))
 
@@ -89,7 +89,7 @@ describe('zenmux-oauth real composition', () => {
       ['@deepseek-ai/dsh-agent', AgentRegistry],
       ['@deepseek-ai/dsh-commands', CommandRuntime],
       ['@deepseek-ai/dsh-credentials-local', LocalCredentialProvider],
-      ['dsh-zenmux-oauth', zenmuxOAuth],
+      ['@zenmux/dsh-plugins', zenmuxOAuth],
     ])
     ctx.loader.internal = {
       version: 'v2',
