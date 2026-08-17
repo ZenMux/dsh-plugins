@@ -46,7 +46,7 @@ function stubAgent(ctx: Context): Agent {
 }
 
 describe('ZenMux real composition', () => {
-  it('declares the Anthropic compatibility route plus the generated OpenAI model catalog', async () => {
+  it('partitions the generated model catalog by protocol without duplicates', async () => {
     const manifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
       name?: string
@@ -58,17 +58,27 @@ describe('ZenMux real composition', () => {
     expect(patch).toContain("name: '@zenmux/dsh-plugins'")
     expect(patch).toContain("id: llm-pi-ai")
     expect(patch).toContain("apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN")
-    expect(patch).toContain("id: deepseek/deepseek-v4-pro")
-    expect(patch).toContain("name: ZenMux · DeepSeek V4 Pro")
-    expect(patch).toContain("id: deepseek/deepseek-v4-flash")
-    expect(patch).toContain("name: ZenMux · DeepSeek V4 Flash")
     expect(patch).toContain("'https://zenmux.ai/api/v1'")
     expect(patch).toContain('api: anthropic-messages')
     expect(patch).toContain('zenmux-models:')
+    expect(patch).toContain('displayName: ZenMux · OpenAI')
     expect(patch).toContain('api: openai-completions')
     expect(patch).toContain("id: 'google/gemini-3.7-flash'")
     expect(patch).toContain("id: 'openai/gpt-5.6-sol'")
-    expect(patch.match(/^          - id:/gm)).toHaveLength(152)
+    expect(patch.match(/^          - id:/gm)).toHaveLength(150)
+    expect(patch.match(/id: 'anthropic\/claude-fable-5'/g)).toHaveLength(1)
+    const anthropicBlock = patch.slice(
+      patch.indexOf('# zenmux-anthropic-model-catalog:start'),
+      patch.indexOf('# zenmux-anthropic-model-catalog:end'),
+    )
+    const openaiBlock = patch.slice(
+      patch.indexOf('# zenmux-openai-model-catalog:start'),
+      patch.indexOf('# zenmux-openai-model-catalog:end'),
+    )
+    expect(anthropicBlock.match(/^          - id:/gm)).toHaveLength(126)
+    expect(openaiBlock.match(/^          - id:/gm)).toHaveLength(24)
+    expect(anthropicBlock).toContain("id: 'anthropic/claude-fable-5'")
+    expect(openaiBlock).not.toContain("id: 'anthropic/claude-fable-5'")
     expect(patch).toContain('cacheRetention: short')
     expect(patch).toContain('high: 10240')
     expect(patch).toContain('reasoningEfforts:')

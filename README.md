@@ -15,7 +15,7 @@ dsh web
 
 For repository testing, use `dsh plugin --profile web add github:ZenMux/dsh-plugins` instead.
 
-The package declares `dsh.bundle.patch`, so the plugin manager adds its `cordis.patch.yml` automatically. The patch mounts the `zenmux` OAuth controller and adds the compatibility-preserving `zenmux` Anthropic route plus a generated `zenmux-models` OpenAI-compatible catalog to DSH's existing pi-ai adapter. It does not inject deployment-specific proxy configuration or replace the built-in DeepSeek route.
+The package declares `dsh.bundle.patch`, so the plugin manager adds its `cordis.patch.yml` automatically. The patch mounts the `zenmux` OAuth controller and partitions ZenMux's text catalog between an Anthropic Messages route and an OpenAI-compatible fallback route. It does not inject deployment-specific proxy configuration or replace the built-in DeepSeek route.
 
 ## Login
 
@@ -44,36 +44,19 @@ llm-pi-ai:
         medium: 5120
         high: 10240
       models:
-        - id: deepseek/deepseek-v4-pro
-          name: ZenMux · DeepSeek V4 Pro
-          reasoningEfforts:
-            off: null
-            minimal: minimal
-            low: low
-            medium: medium
-            high: high
-        - id: deepseek/deepseek-v4-flash
-          name: ZenMux · DeepSeek V4 Flash
-          reasoningEfforts:
-            off: null
-            minimal: minimal
-            low: low
-            medium: medium
-            high: high
+        # 126 models generated from GET /api/anthropic/v1/models.
     zenmux-models:
-      displayName: ZenMux
+      displayName: ZenMux · OpenAI
       baseURL: https://zenmux.ai/api/v1
       api: openai-completions
       apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN
       models:
-        # Generated from GET https://zenmux.ai/api/v1/models.
-        # Text-output entries include id, display name, context, input modalities,
-        # and the reasoning levels advertised by the ZenMux catalog.
+        # 24 OpenAI-only text models generated from GET /api/v1/models.
 ```
 
-After login, the **ZenMux** provider group exposes every text-output model from the generated `/models` snapshot. The composer model selector includes local search over provider name/id and model name/id/description. The separate **ZenMux · Anthropic** group keeps the previous DeepSeek V4 Pro/Flash route on Anthropic Messages so existing sessions retain native prompt caching and thinking budgets. DSH's default remains the official DeepSeek route. If `accessTokenRef` is customized, apply the same reference to both `llm-pi-ai.providers.zenmux.apiKeyEnv` and `llm-pi-ai.providers.zenmux-models.apiKeyEnv`; do not paste an OAuth token into the model form.
+After login, **ZenMux · Anthropic** exposes every model advertised by `/api/anthropic/v1/models` and applies Anthropic ephemeral prompt-cache controls through `cacheRetention: short`. Models also present in the OpenAI listing—including Claude Fable 5—appear only in this group. **ZenMux · OpenAI** contains the remaining text models, so the two groups have no duplicate IDs while retaining all text models from `/api/v1/models`. The composer selector searches provider name/id and model name/id/description. If `accessTokenRef` is customized, apply the same reference to both provider routes; do not paste an OAuth token into the model form.
 
-Run `pnpm sync:models` before a release to refresh the bundled catalog from `/api/v1/models`; `pnpm check:models` fails when the checked-in snapshot differs from the live endpoint. Entries whose `output_modalities` do not contain `text` are intentionally excluded because DSH's model seam accepts language models, not embedding, image-generation, or transcription models. The endpoint order is preserved. Current DSH automatic discovery can also refresh the `zenmux-models` route from its OpenAI-compatible endpoint in **Settings → Models**; the Anthropic compatibility route remains manually declared because that protocol has no discovery support.
+Run `pnpm sync:models` before a release to refresh both `/api/v1/models` and `/api/anthropic/v1/models`; `pnpm check:models` fails when either checked-in snapshot differs. Entries whose `output_modalities` do not contain `text` are excluded. Current DSH discovery can interrogate the OpenAI route in Settings, but the release generator remains authoritative for protocol partitioning because DSH cannot discover an Anthropic Messages catalog itself.
 
 ## Configuration
 
@@ -106,7 +89,7 @@ Both credential references must be distinct writable references. Environment-sup
 | `ZENMUX_OAUTH_NO_BROWSER` | unset | Set to `1` to suppress automatic browser opening |
 | `HTTPS_PROXY` / `https_proxy` | unset | OAuth discovery/token/revocation proxy when `proxyUrl` is empty |
 
-`CODEX_HOME`, `ZENMUX_OAUTH_STATE_DIR`, and `ZENMUX_OAUTH_STORAGE` belong to Codex-style file/keychain clients and are intentionally not consumed: DSH owns persistence through its credentials service. `ZENMUX_MODELS_CATALOG_URL` is build-time input for `pnpm sync:models`; it does not change a running DSH profile.
+`CODEX_HOME`, `ZENMUX_OAUTH_STATE_DIR`, and `ZENMUX_OAUTH_STORAGE` belong to Codex-style file/keychain clients and are intentionally not consumed: DSH owns persistence through its credentials service. `ZENMUX_MODELS_CATALOG_URL` and `ZENMUX_ANTHROPIC_MODELS_CATALOG_URL` are build-time inputs for `pnpm sync:models`; they do not change a running DSH profile.
 
 ## Persistence and refresh
 
@@ -132,6 +115,6 @@ The bundled Anthropic route requests `cacheRetention: short`. DSH/pi-ai adds Ant
 
 ## Known Limitations and Deferred Work
 
-- **Catalog is a release snapshot** — the bundled `zenmux-models` list changes only when maintainers run `pnpm sync:models`; users can refresh and save that OpenAI-compatible route in DSH Settings, while the Anthropic compatibility route remains manually declared.
+- **Catalogs are release snapshots** — both protocol lists change only when maintainers run `pnpm sync:models`; runtime startup remains deterministic.
 - **Interactive command adapters only** — the shipped Web app can run `/zenmux`; headless and automation deployments that do not consume `ctx.commands` cannot initiate browser login, though they can use a token set created by another interactive run over the same Harness home.
 - **Proxy availability is deployment-owned** — login and refresh fail closed when the configured SOCKS proxy is unavailable; the plugin does not silently fall back to a direct connection.
