@@ -14,25 +14,10 @@
 
 ## 安装
 
-### macOS DSH Desktop
-
-先彻底退出 DSH Desktop，再执行：
-
-```sh
-DSH_HOME="$HOME/Library/Application Support/DSH Desktop/dsh-home" \
-dsh plugin --profile web add @zenmux/dsh-plugins@latest
-```
-
-安装完成后重新打开 DSH Desktop。
-
-### DSH CLI / Web
-
 ```sh
 dsh plugin --profile web add @zenmux/dsh-plugins@latest
 dsh web
 ```
-
-Desktop 与 CLI 使用不同的 DSH Home；两边都使用时，需要分别安装插件。
 
 ## 登录
 
@@ -55,27 +40,28 @@ Desktop 与 CLI 使用不同的 DSH Home；两边都使用时，需要分别安�
 
 ## 更新
 
-退出正在运行的 DSH，重新执行对应的 `@latest` 安装命令，然后启动 DSH。检查版本：
+退出正在运行的 DSH，更新插件后重新启动：
+
+```sh
+dsh plugin --profile web add @zenmux/dsh-plugins@latest
+dsh web
+```
+
+检查版本：
 
 ```sh
 dsh plugin --profile web list --depth 0
 ```
 
-检查 Desktop 时，需要在命令前加上上面的 Desktop `DSH_HOME`。
-
 ## 常见问题
 
 ### 已是最新版，但仍只有几个模型
 
-旧的手工模型配置覆盖了插件目录。在当前 DSH Home 的 `settings.yaml` 中，只删除 `llm-pi-ai.providers.zenmux` 和 `llm-pi-ai.providers.zenmux-models` 下的 `models:` 数组，然后重启 DSH。不要删除凭据引用或其他 provider。
-
-### Desktop 更新了，但 CLI 没更新（或反过来）
-
-它们使用不同的 DSH Home。请更新当前正在使用的应用所对应的 profile。
+旧的手工模型配置覆盖了插件目录。在 `~/.dsh/settings.yaml` 中，只删除 `llm-pi-ai.providers.zenmux` 和 `llm-pi-ai.providers.zenmux-models` 下的 `models:` 数组，然后重启 DSH。不要删除凭据引用或其他 provider。
 
 ### 出现 `API key is invalid` 或 `AUTH`
 
-在对应安装实例中重新运行 `/zenmux login`。每个 DSH Home 都保存自己的 OAuth 凭据。
+重新运行 `/zenmux login`。
 
 ### 网络或 TLS 错误
 

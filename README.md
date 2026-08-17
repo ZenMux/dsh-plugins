@@ -14,25 +14,10 @@ Use ZenMux models in DeepSeek Harness (DSH) without copying an API key. Sign in 
 
 ## Install
 
-### DSH Desktop on macOS
-
-Quit DSH Desktop completely, then run:
-
-```sh
-DSH_HOME="$HOME/Library/Application Support/DSH Desktop/dsh-home" \
-dsh plugin --profile web add @zenmux/dsh-plugins@latest
-```
-
-Reopen DSH Desktop after installation.
-
-### DSH CLI / Web
-
 ```sh
 dsh plugin --profile web add @zenmux/dsh-plugins@latest
 dsh web
 ```
-
-Desktop and CLI use different DSH home directories. Install the plugin in each one you use.
 
 ## Sign in
 
@@ -55,27 +40,28 @@ The first eligible Anthropic request can create a prompt cache. Later requests w
 
 ## Update
 
-Quit the running DSH process, repeat the matching install command with `@latest`, then restart DSH. Confirm the installed version with:
+Quit the running DSH process, update the plugin, then restart DSH:
+
+```sh
+dsh plugin --profile web add @zenmux/dsh-plugins@latest
+dsh web
+```
+
+Confirm the installed version with:
 
 ```sh
 dsh plugin --profile web list --depth 0
 ```
 
-For Desktop, prefix that command with the Desktop `DSH_HOME` shown above.
-
 ## Troubleshooting
 
 ### The latest plugin still shows only a few models
 
-An older manual model list is overriding the bundled catalog. In the active DSH home's `settings.yaml`, remove only the `models:` arrays under `llm-pi-ai.providers.zenmux` and `llm-pi-ai.providers.zenmux-models`, then restart DSH. Keep credential references and unrelated providers.
-
-### Desktop updated, but CLI did not (or the reverse)
-
-They use separate DSH homes. Update the profile that belongs to the app you are running.
+An older manual model list is overriding the bundled catalog. In `~/.dsh/settings.yaml`, remove only the `models:` arrays under `llm-pi-ai.providers.zenmux` and `llm-pi-ai.providers.zenmux-models`, then restart DSH. Keep credential references and unrelated providers.
 
 ### `API key is invalid` or `AUTH`
 
-Run `/zenmux login` in that installation. Each DSH home stores its own OAuth credentials.
+Run `/zenmux login` again.
 
 ### Network or TLS errors
 

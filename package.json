@@ -1,7 +1,7 @@
 {
   "name": "@zenmux/dsh-plugins",
   "description": "Use ZenMux models in DeepSeek Harness with OAuth login, model search, and protocol-aware routing",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": false,
   "type": "module",
   "license": "MIT",
