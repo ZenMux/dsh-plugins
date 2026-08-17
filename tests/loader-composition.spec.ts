@@ -46,7 +46,7 @@ function stubAgent(ctx: Context): Agent {
 }
 
 describe('ZenMux real composition', () => {
-  it('declares the external DSH bundle, Anthropic cache/reasoning route, and no deployment proxy', async () => {
+  it('declares the Anthropic compatibility route plus the generated OpenAI model catalog', async () => {
     const manifestPath = fileURLToPath(new URL('../package.json', import.meta.url))
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
       name?: string
@@ -64,6 +64,11 @@ describe('ZenMux real composition', () => {
     expect(patch).toContain("name: ZenMux · DeepSeek V4 Flash")
     expect(patch).toContain("'https://zenmux.ai/api/v1'")
     expect(patch).toContain('api: anthropic-messages')
+    expect(patch).toContain('zenmux-models:')
+    expect(patch).toContain('api: openai-completions')
+    expect(patch).toContain("id: 'google/gemini-3.7-flash'")
+    expect(patch).toContain("id: 'openai/gpt-5.6-sol'")
+    expect(patch.match(/^          - id:/gm)).toHaveLength(152)
     expect(patch).toContain('cacheRetention: short')
     expect(patch).toContain('high: 10240')
     expect(patch).toContain('reasoningEfforts:')

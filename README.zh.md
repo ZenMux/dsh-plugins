@@ -15,7 +15,7 @@ dsh web
 
 测试 GitHub 仓库版本时，改用 `dsh plugin --profile web add github:ZenMux/dsh-plugins`。
 
-这个包声明了 `dsh.bundle.patch`，所以插件管理器会自动加入它的 `cordis.patch.yml`。该 patch 会挂载名为 `zenmux` 的 OAuth 控制器，并给 DSH 已有的 pi-ai adapter 加入 `zenmux` 提供方；它不会注入部署相关的代理配置，也不会替换内置 DeepSeek 路由。
+这个包声明了 `dsh.bundle.patch`，所以插件管理器会自动加入它的 `cordis.patch.yml`。该 patch 会挂载名为 `zenmux` 的 OAuth 控制器，并给 DSH 已有的 pi-ai adapter 加入保留兼容性的 `zenmux` Anthropic 路由与由目录生成的 `zenmux-models` OpenAI 兼容路由；它不会注入部署相关的代理配置，也不会替换内置 DeepSeek 路由。
 
 ## 登录
 
@@ -27,13 +27,13 @@ ZenMux discovery、token 与 revocation 请求默认直连。确实需要代理�
 
 ## ZenMux 模型路由
 
-bundle 会把下面的提供方 profile 加到 DSH 已有的 `llm-pi-ai` entry：
+bundle 会把两个提供方 profile 加到 DSH 已有的 `llm-pi-ai` entry：
 
 ```yaml
 llm-pi-ai:
   providers:
     zenmux:
-      displayName: ZenMux
+      displayName: ZenMux · Anthropic
       baseURL: https://zenmux.ai/api/anthropic
       api: anthropic-messages
       apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN
@@ -60,11 +60,19 @@ llm-pi-ai:
             low: low
             medium: medium
             high: high
+    zenmux-models:
+      displayName: ZenMux
+      baseURL: https://zenmux.ai/api/v1
+      api: openai-completions
+      apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN
+      models:
+        # 由 GET https://zenmux.ai/api/v1/models 生成。
+        # 文本输出条目包含 ID、展示名、上下文、输入模态和目录声明的推理等级。
 ```
 
-登录后，在模型选择器中选择 **ZenMux · DeepSeek V4 Pro** 或 **ZenMux · DeepSeek V4 Flash**。这条路由优先使用 Anthropic Messages，让 DSH/pi-ai 原生处理 Anthropic 提示词缓存与思考预算。DSH 默认仍是官方 DeepSeek 路由，因此已有对话不会被静默切换提供方。如果自定义了 `accessTokenRef`，需要同时把 `llm-pi-ai.providers.zenmux.apiKeyEnv` 改成同一个引用；不要把 OAuth token 粘贴到模型表单。
+登录后，**ZenMux** 提供方组会展示生成时 `/models` 返回的全部文本输出模型。composer 模型选择器支持按提供方名称／ID、模型名称／ID／描述做本地搜索。独立的 **ZenMux · Anthropic** 组保留此前的 DeepSeek V4 Pro/Flash Anthropic Messages 路由，因此已有会话仍使用原生提示词缓存与思考预算。DSH 默认仍是官方 DeepSeek 路由。如果自定义了 `accessTokenRef`，需要同时把 `llm-pi-ai.providers.zenmux.apiKeyEnv` 和 `llm-pi-ai.providers.zenmux-models.apiKeyEnv` 改成同一个引用；不要把 OAuth token 粘贴到模型表单。
 
-随包模型只是可用的初始条目。在 **设置 → 模型** 中，可以用任意 ZenMux 模型 ID 替换、编辑或扩展该提供方的 `models` 数组，并配置容量和推理等级。当前 DSH 自动模型发现支持 OpenAI 兼容的 `/models` 路由，但不支持 `anthropic-messages`，所以 Anthropic 优先路由采用手工模型条目，不展示一个实际不可用的刷新能力。
+每次发布前运行 `pnpm sync:models`，可从 `/api/v1/models` 刷新随包目录；`pnpm check:models` 会在仓库快照与线上接口不一致时失败。`output_modalities` 不含 `text` 的条目会被刻意排除，因为 DSH 的模型执行缝只接受语言模型，不能执行 embedding、图片生成或语音转写模型；接口原始顺序保持不变。当前 DSH 也可以在 **设置 → 模型** 中从 OpenAI 兼容端点刷新 `zenmux-models` 路由；Anthropic 兼容路由因协议不支持自动发现而继续手工声明。
 
 ## 配置
 
@@ -97,7 +105,7 @@ llm-pi-ai:
 | `ZENMUX_OAUTH_NO_BROWSER` | 未设置 | 设为 `1` 时禁止自动打开浏览器 |
 | `HTTPS_PROXY` / `https_proxy` | 未设置 | `proxyUrl` 为空时用于 OAuth discovery/token/revocation 的代理 |
 
-`CODEX_HOME`、`ZENMUX_OAUTH_STATE_DIR` 和 `ZENMUX_OAUTH_STORAGE` 属于 Codex 风格的文件／钥匙串客户端，DSH 由 credentials service 负责持久化，因此刻意不读取这些变量。`ZENMUX_MODELS_CATALOG_URL` 也暂不读取，直到上游 DSH 支持 `anthropic-messages` 的模型发现；接受一个实际不改变行为的变量会造成误导。
+`CODEX_HOME`、`ZENMUX_OAUTH_STATE_DIR` 和 `ZENMUX_OAUTH_STORAGE` 属于 Codex 风格的文件／钥匙串客户端，DSH 由 credentials service 负责持久化，因此刻意不读取这些变量。`ZENMUX_MODELS_CATALOG_URL` 只作为 `pnpm sync:models` 的构建期输入，不改变正在运行的 DSH profile。
 
 ## 持久化与刷新
 
@@ -123,6 +131,6 @@ llm-pi-ai:
 
 ## 已知限制与暂缓事项
 
-- **随包声明两个模型**——当前声明 `deepseek/deepseek-v4-pro` 和 `deepseek/deepseek-v4-flash`；用户可在 DSH 设置中替换 `models` 数组，但 Anthropic 协议目前没有自动发现能力。
+- **目录是发布时快照**——随包 `zenmux-models` 列表只会在维护者运行 `pnpm sync:models` 后变化；用户可以在 DSH 设置中刷新并保存 OpenAI 兼容路由，Anthropic 兼容路由继续手工声明。
 - **仅限交互式命令适配器**——随附 Web 应用可以运行 `/zenmux`；不消费 `ctx.commands` 的 headless 与自动化部署无法发起浏览器登录，但可使用另一次交互运行在同一 Harness home 中创建的 token 集合。
 - **代理可用性由部署负责**——配置的 SOCKS 代理不可用时，登录与刷新会以失败关闭；插件不会悄悄回退到直连。

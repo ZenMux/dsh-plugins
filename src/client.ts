@@ -5,6 +5,8 @@ import type { CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { CommandRowProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-commands/client'
+import type {} from '@deepseek-ai/dsh-client-ui-model-selection/client'
+import { installSearchableModelSelect } from './model-search-client.js'
 import {
   BROWSER_AUTO_OPEN_DISABLED_LINE,
   OAUTH_ORIGIN_LINE_PREFIX,
@@ -14,7 +16,7 @@ import {
 /** Client plugin name. */
 export const name = 'zenmux-client'
 /** Services required for command acknowledgements and command-row registration. */
-export const inject = ['slots', 'commandUi']
+export const inject = ['slots', 'commandUi', 'modelDirectories', 'sessions']
 
 const AUTHORIZE_PATH = '/oauth/authorize'
 const STATUS_POLL_INTERVAL_MS = 1_000
@@ -187,6 +189,8 @@ function ZenMuxCommandCard({ node }: CommandRowProps): ReactNode {
 
 /** Mount popup behavior and the ZenMux command card into DSH Web. */
 export function apply(ctx: Context): void {
+  installSearchableModelSelect(ctx)
+
   ctx.on('command/executed', (_sessionId, commandName, result) => {
     if (commandName !== 'zenmux') return
     const url = authorizationUrlFromResult(result)

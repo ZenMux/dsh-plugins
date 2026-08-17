@@ -6,9 +6,9 @@ export default defineConfig({
   clean: false,
   dts: false,
   entry: { client: 'src/client.ts' },
-  external: ['react'],
+  external: ['react', 'react/jsx-runtime'],
   format: 'cjs',
-  noExternal: id => id !== 'react',
+  noExternal: id => id !== 'react' && id !== 'react/jsx-runtime',
   outDir: 'lib',
   outputOptions: {
     banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(CLIENT_ID)}, factory: (require) => {`,

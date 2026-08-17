@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
   authorizationUrlFromResult,
@@ -10,6 +12,12 @@ import {
 const ZENMUX_AI_ORIGIN = 'ZenMux OAuth origin: https://zenmux.ai'
 
 describe('ZenMux DSH Web client', () => {
+  it('keeps the JSX runtime external so the browser bundle does not require process', async () => {
+    const bundle = await readFile(fileURLToPath(new URL('../lib/client.js', import.meta.url)), 'utf8')
+    expect(bundle).toContain('require("react/jsx-runtime")')
+    expect(bundle).not.toMatch(/\bprocess(?:\.env)?\b/u)
+  })
+
   it('extracts HTTPS and loopback-development authorization endpoints only', () => {
     const expected = 'https://zenmux.ai/oauth/authorize?state=test&code_challenge=challenge'
     expect(authorizationUrlFromText(`Open this URL:\n${ZENMUX_AI_ORIGIN}\n${expected}\nThen return.`)).toBe(expected)
