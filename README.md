@@ -1,120 +1,93 @@
-# @zenmux/dsh-plugins
+# ZenMux for DeepSeek Harness
 
-English | [中文](README.zh.md)
+[中文说明](https://github.com/ZenMux/dsh-plugins/blob/main/README.zh.md) · [GitHub](https://github.com/ZenMux/dsh-plugins) · [ZenMux](https://zenmux.ai)
 
-ZenMux OAuth 2.0 Authorization Code login with PKCE S256 for interactive Harness deployments. The plugin registers `/zenmux [login|status|logout]`, receives the authorization response on a single-use `127.0.0.1` loopback listener, persists the versioned access/refresh token set through `ctx.credentials`, and refreshes before expiry.
+Use ZenMux models in DeepSeek Harness (DSH) without copying an API key. Sign in through your browser, search the full model catalog, and let the plugin choose the cache-capable protocol for each model.
 
-## Install in DSH
+## Features
 
-Install the published npm bundle into the DSH Web profile, then start DSH normally:
+- Browser OAuth login with automatic token refresh.
+- 150 searchable text models in the current bundled catalog.
+- 126 models routed through Anthropic Messages with prompt-cache controls.
+- 24 OpenAI-only models routed through Chat Completions.
+- `/zenmux login`, `/zenmux status`, and `/zenmux logout` commands.
+
+## Install
+
+### DSH Desktop on macOS
+
+Quit DSH Desktop completely, then run:
 
 ```sh
-dsh plugin --profile web add @zenmux/dsh-plugins
+DSH_HOME="$HOME/Library/Application Support/DSH Desktop/dsh-home" \
+dsh plugin --profile web add @zenmux/dsh-plugins@latest
+```
+
+Reopen DSH Desktop after installation.
+
+### DSH CLI / Web
+
+```sh
+dsh plugin --profile web add @zenmux/dsh-plugins@latest
 dsh web
 ```
 
-For repository testing, use `dsh plugin --profile web add github:ZenMux/dsh-plugins` instead.
+Desktop and CLI use different DSH home directories. Install the plugin in each one you use.
 
-The package declares `dsh.bundle.patch`, so the plugin manager adds its `cordis.patch.yml` automatically. The patch mounts the `zenmux` OAuth controller and partitions ZenMux's text catalog between an Anthropic Messages route and an OpenAI-compatible fallback route. It does not inject deployment-specific proxy configuration or replace the built-in DeepSeek route.
+## Sign in
 
-## Login
+In a DSH conversation, run:
 
-Run `/zenmux login`; DSH Web opens the returned ZenMux authorization URL in a new tab and also renders an **Open ZenMux login** fallback link. Approve access and return after the callback page says **ZenMux connected**. `/zenmux status` reports connection and expiry without returning tokens. `/zenmux logout` attempts remote refresh-token revocation, clears the stored OAuth set, and removes the mirrored access token only when it still matches the OAuth-owned value.
-
-The bundled public client uses the registered callback `http://127.0.0.1:<ephemeral-port>/callback` and requests `inference:invoke offline_access`. Set `ZENMUX_OAUTH_NO_BROWSER=1` to keep the manual link without automatically opening a new tab. The listener rejects other paths, mismatched state, duplicate callbacks, and callbacks after `loginTimeoutMs`; it binds only to loopback and closes after one accepted response or timeout.
-
-ZenMux discovery, token, and revocation requests connect directly by default. Deployments that require a proxy may set `proxyUrl` explicitly in their DSH profile or export `HTTPS_PROXY`/`https_proxy`; explicit plugin config takes priority. HTTP, HTTPS, and remote-DNS SOCKS proxy URLs are accepted. Browser traffic must be able to reach the same authorization service independently. If the configured route terminates TLS with a local CA, add the CA before Node starts, for example `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem dsh web`. Do not use `NODE_TLS_REJECT_UNAUTHORIZED=0`: disabling verification would expose authorization codes and refresh tokens.
-
-## ZenMux model route
-
-The bundle supplies two provider profiles to DSH's existing `llm-pi-ai` entry:
-
-```yaml
-llm-pi-ai:
-  providers:
-    zenmux:
-      displayName: ZenMux · Anthropic
-      baseURL: https://zenmux.ai/api/anthropic
-      api: anthropic-messages
-      apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN
-      cacheRetention: short
-      thinkingBudgets:
-        minimal: 1024
-        low: 2048
-        medium: 5120
-        high: 10240
-      models:
-        # 126 models generated from GET /api/anthropic/v1/models.
-    zenmux-models:
-      displayName: ZenMux · OpenAI
-      baseURL: https://zenmux.ai/api/v1
-      api: openai-completions
-      apiKeyEnv: ZENMUX_OAUTH_ACCESS_TOKEN
-      models:
-        # 24 OpenAI-only text models generated from GET /api/v1/models.
+```text
+/zenmux login
 ```
 
-After login, **ZenMux · Anthropic** exposes every model advertised by `/api/anthropic/v1/models` and applies Anthropic ephemeral prompt-cache controls through `cacheRetention: short`. Models also present in the OpenAI listing—including Claude Fable 5—appear only in this group. **ZenMux · OpenAI** contains the remaining text models, so the two groups have no duplicate IDs while retaining all text models from `/api/v1/models`. The composer selector searches provider name/id and model name/id/description. If `accessTokenRef` is customized, apply the same reference to both provider routes; do not paste an OAuth token into the model form.
+Approve the ZenMux authorization page and return to DSH. Check the connection with `/zenmux status`; disconnect this installation with `/zenmux logout`.
 
-Run `pnpm sync:models` before a release to refresh both `/api/v1/models` and `/api/anthropic/v1/models`; `pnpm check:models` fails when either checked-in snapshot differs. Entries whose `output_modalities` do not contain `text` are excluded. Current DSH discovery can interrogate the OpenAI route in Settings, but the release generator remains authoritative for protocol partitioning because DSH cannot discover an Anthropic Messages catalog itself.
+## Choose a model
 
-## Configuration
+Open the model selector and search by model name or ID.
 
-| Field | Default | Meaning |
-|---|---|---|
-| `oauthOrigin` | `ZENMUX_OAUTH_ORIGIN` or `https://zenmux.ai` | Authorization-server origin; HTTPS is required except for loopback development |
-| `clientId` | ZenMux Harness public client | Registered public OAuth client id |
-| `scopes` | `inference:invoke`, `offline_access` | Required inference and refresh scopes |
-| `callbackPort` | `0` | Loopback port; zero selects a free OS port |
-| `proxyUrl` | empty | Optional deployment-supplied `http://`, `https://`, `socks4a://`, or `socks5h://` proxy; otherwise inherits `HTTPS_PROXY`/`https_proxy`, then connects directly |
-| `browserAutoOpen` | disabled only when `ZENMUX_OAUTH_NO_BROWSER=1` | Automatically open the login URL in DSH Web while retaining the manual link |
-| `accessTokenRef` | `ZENMUX_OAUTH_ACCESS_TOKEN` | Raw access-token mirror read by the LLM provider |
-| `tokenSetRef` | `ZENMUX_OAUTH_TOKENS` | Versioned JSON access/refresh token set |
-| `loginTimeoutMs` | `300000` | Pending loopback-login lifetime |
-| `requestTimeoutMs` | `30000` | Discovery, token, and revocation request timeout |
-| `refreshSkewMs` | `60000` | Refresh lead time before expiry |
-| `refreshRetryMs` | `30000` | Delay between failed background refresh attempts |
+- **ZenMux · Anthropic**: cache-capable models using Anthropic Messages. Claude Fable 5 belongs here.
+- **ZenMux · OpenAI**: the remaining OpenAI-only models.
 
-Both credential references must be distinct writable references. Environment-supplied credentials are intentionally read-only in [`dsh-credentials-local`](https://github.com/deepseek-ai/deepseek-harness/tree/master/packages/credentials/credentials-local); choose unshadowed references rather than expecting OAuth login to overwrite an exported variable.
+The first eligible Anthropic request can create a prompt cache. Later requests with the same prefix can report cache reads.
 
-### Environment variables
+## Update
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `ZENMUX_OAUTH_ORIGIN` | `https://zenmux.ai` | OAuth authorization-server origin |
-| `ZENMUX_OAUTH_CLIENT_ID` | bundled public client | Override the OAuth public client ID |
-| `ZENMUX_OAUTH_SCOPES` | `inference:invoke offline_access` | Whitespace-separated login scopes |
-| `ZENMUX_API_BASE_URL` | `https://zenmux.ai/api/v1` | Generic ZenMux API base; its origin is used to derive `/api/anthropic` |
-| `ZENMUX_ANTHROPIC_BASE_URL` | derived from `ZENMUX_API_BASE_URL` | Exact Anthropic Messages endpoint override |
-| `ZENMUX_OAUTH_NO_BROWSER` | unset | Set to `1` to suppress automatic browser opening |
-| `HTTPS_PROXY` / `https_proxy` | unset | OAuth discovery/token/revocation proxy when `proxyUrl` is empty |
+Quit the running DSH process, repeat the matching install command with `@latest`, then restart DSH. Confirm the installed version with:
 
-`CODEX_HOME`, `ZENMUX_OAUTH_STATE_DIR`, and `ZENMUX_OAUTH_STORAGE` belong to Codex-style file/keychain clients and are intentionally not consumed: DSH owns persistence through its credentials service. `ZENMUX_MODELS_CATALOG_URL` and `ZENMUX_ANTHROPIC_MODELS_CATALOG_URL` are build-time inputs for `pnpm sync:models`; they do not change a running DSH profile.
+```sh
+dsh plugin --profile web list --depth 0
+```
 
-## Persistence and refresh
+For Desktop, prefix that command with the Desktop `DSH_HOME` shown above.
 
-The plugin discovers endpoints from `<oauthOrigin>/.well-known/oauth-authorization-server` and accepts metadata only when the issuer and every credential-bearing endpoint remain on that configured origin. It requires HTTPS except for loopback development, authorization-code and refresh grants, public-client token authentication, and PKCE S256.
+## Troubleshooting
 
-One JSON credential stores `accessToken`, `refreshToken`, `tokenType`, `expiresAt`, optional scope, and format version. A token exchange commits that recoverable set before updating the raw access-token mirror; startup repairs the mirror when a process stopped between those writes. Refresh-token rotation replaces the stored refresh token, while a response that omits it preserves the current one. Failed background refresh retries at `refreshRetryMs` without deleting the last token set.
+### The latest plugin still shows only a few models
 
-## Model Experience
+An older manual model list is overriding the bundled catalog. In the active DSH home's `settings.yaml`, remove only the `models:` arrays under `llm-pi-ai.providers.zenmux` and `llm-pi-ai.providers.zenmux-models`, then restart DSH. Keep credential references and unrelated providers.
 
-### Provider authorization
+### Desktop updated, but CLI did not (or the reverse)
 
-#### What the model sees
+They use separate DSH homes. Update the profile that belongs to the app you are running.
 
-No OAuth state, token, expiry, or command result. The consuming LLM adapter uses the mirrored access token only as the provider request's `Authorization: Bearer …` header.
+### `API key is invalid` or `AUTH`
 
-#### Token effect
+Run `/zenmux login` in that installation. Each DSH home stores its own OAuth credentials.
 
-Zero direct token effect; authentication data is absent from model input and retained history.
+### Network or TLS errors
 
-#### KV Cache effect
+OAuth requests connect directly by default and can use an explicit HTTP(S)/SOCKS proxy. Custom TLS interception may also require `NODE_EXTRA_CA_CERTS` before DSH starts. See the [implementation and rollout notes](https://github.com/ZenMux/dsh-plugins/tree/main/docs/sdd) for advanced deployment details.
 
-The bundled Anthropic route requests `cacheRetention: short`. DSH/pi-ai adds Anthropic ephemeral cache control to eligible prompt blocks; actual cache reads/writes still depend on the selected model and ZenMux upstream response. OAuth itself changes only request headers and does not alter the model-visible prefix.
+## Development
 
-## Known Limitations and Deferred Work
+```sh
+pnpm install
+pnpm test
+```
 
-- **Catalogs are release snapshots** — both protocol lists change only when maintainers run `pnpm sync:models`; runtime startup remains deterministic.
-- **Interactive command adapters only** — the shipped Web app can run `/zenmux`; headless and automation deployments that do not consume `ctx.commands` cannot initiate browser login, though they can use a token set created by another interactive run over the same Harness home.
-- **Proxy availability is deployment-owned** — login and refresh fail closed when the configured SOCKS proxy is unavailable; the plugin does not silently fall back to a direct connection.
+Model catalogs are release snapshots generated from ZenMux's OpenAI and Anthropic model-list endpoints. Source and issue tracking live at [ZenMux/dsh-plugins](https://github.com/ZenMux/dsh-plugins).
+
+MIT License

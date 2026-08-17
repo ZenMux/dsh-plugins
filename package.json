@@ -1,7 +1,7 @@
 {
   "name": "@zenmux/dsh-plugins",
-  "description": "ZenMux OAuth 2.0 PKCE login, token refresh, and Harness credential mirroring",
-  "version": "0.1.7",
+  "description": "Use ZenMux models in DeepSeek Harness with OAuth login, model search, and protocol-aware routing",
+  "version": "0.1.8",
   "private": false,
   "type": "module",
   "license": "MIT",
