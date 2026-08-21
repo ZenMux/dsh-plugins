@@ -304,6 +304,39 @@ describe('/zenmux OAuth PKCE lifecycle', () => {
     })
   })
 
+  it('refreshes an expired token before returning browser status after wake', async () => {
+    const tokenRequests = mockOAuth([{
+      access_token: 'access-after-wake',
+      refresh_token: 'refresh-after-wake',
+      expires_in: 3600,
+      token_type: 'Bearer',
+    }])
+    const expired = JSON.stringify({
+      version: 1,
+      accessToken: 'access-before-sleep',
+      refreshToken: 'refresh-before-sleep',
+      tokenType: 'Bearer',
+      expiresAt: Date.now() - 1,
+    })
+    const test = await harness(async (ctx) => {
+      await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
+      await ctx.credentials.set(TOKENS_REF, expired)
+      await ctx.credentials.set(ACCESS_REF, 'access-before-sleep')
+    }, '', { refreshRetryMs: 60_000 })
+
+    const browserStatus = await callback(`http://127.0.0.1:${test.ctx.webServer.port}/zenmux/oauth/status`)
+    expect(browserStatus.status).toBe(200)
+    expect(JSON.parse(browserStatus.body)).toMatchObject({
+      connected: true,
+      detail: expect.stringContaining('is connected'),
+    })
+    expect(tokenRequests).toHaveLength(1)
+    expect(await test.ctx.credentials.resolve(ACCESS_REF)).toEqual({
+      value: 'access-after-wake',
+      source: 'file',
+    })
+  })
+
   it('logs out without deleting an unrelated manually replaced API key', async () => {
     mockOAuth([])
     const stored = JSON.stringify({

@@ -18,6 +18,8 @@ export declare function authorizationUrlFromResult(result: CommandResult): strin
 export declare function openAuthorizationWindow(url: string): void;
 /** Read and validate the host's credential-free OAuth state response. */
 export declare function fetchZenMuxBrowserStatus(signal?: AbortSignal): Promise<ZenMuxBrowserStatus | undefined>;
+/** Prompt the host to refresh stale OAuth credentials when the Web UI becomes active. */
+export declare function installOAuthWakeRefresh(): () => void;
 /** Mount popup behavior and the ZenMux command card into DSH Web. */
 export declare function apply(ctx: Context): void;
 //# sourceMappingURL=client.d.ts.map

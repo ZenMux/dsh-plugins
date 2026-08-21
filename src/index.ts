@@ -419,6 +419,7 @@ class ZenMuxOAuthController {
 
   /** Current human-readable state without exposing token values. */
   private async status(): Promise<string> {
+    await this.refreshForStatus()
     const tokenSet = this.tokenSet
     if (tokenSet !== undefined) {
       const expires = new Date(tokenSet.expiresAt).toISOString()
@@ -429,6 +430,26 @@ class ZenMuxOAuthController {
       return `No ZenMux OAuth session is stored. ${this.config.accessTokenRef} is configured separately.`
     }
     return 'ZenMux is not connected. Run /zenmux login.'
+  }
+
+  /** Refresh a stale token before reporting browser-visible connection state. */
+  private async refreshForStatus(): Promise<void> {
+    const tokenSet = this.tokenSet
+    if (tokenSet === undefined || tokenSet.expiresAt - Date.now() > this.config.refreshSkewMs) return
+    try {
+      await this.enqueue(async () => {
+        const current = this.tokenSet
+        if (current !== undefined && current.expiresAt - Date.now() <= this.config.refreshSkewMs) {
+          await this.refresh()
+        }
+      })
+    } catch (error) {
+      this.ctx.logger.warn(
+        'zenmux: token refresh on status failed: %s',
+        error instanceof Error ? error.message : String(error),
+      )
+      this.scheduleRefreshRetry()
+    }
   }
 
   /** Read the OAuth state for the DSH Web card without recording another command. */
