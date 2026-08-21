@@ -35,8 +35,6 @@ export interface Config {
     requestTimeoutMs: number;
     /** Refresh this long before the access-token expiry. */
     refreshSkewMs: number;
-    /** Delay before retrying a failed background refresh. */
-    refreshRetryMs: number;
 }
 /** Validated Cordis configuration. */
 export declare const Config: z<Config>;

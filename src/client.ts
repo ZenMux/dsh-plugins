@@ -121,23 +121,6 @@ export async function fetchZenMuxBrowserStatus(signal?: AbortSignal): Promise<Ze
   return { connected, detail }
 }
 
-/** Prompt the host to refresh stale OAuth credentials when the Web UI becomes active. */
-export function installOAuthWakeRefresh(): () => void {
-  let controller: AbortController | undefined
-  const refresh = (): void => {
-    if (document.visibilityState !== 'visible') return
-    controller?.abort()
-    controller = new AbortController()
-    void fetchZenMuxBrowserStatus(controller.signal).catch(() => {})
-  }
-  document.addEventListener('visibilitychange', refresh)
-  refresh()
-  return () => {
-    document.removeEventListener('visibilitychange', refresh)
-    controller?.abort()
-  }
-}
-
 /** Poll only while a login card is waiting, and stop as soon as it becomes connected. */
 function useZenMuxBrowserStatus(authorizationUrl: string | undefined): ZenMuxBrowserStatus | undefined {
   const [status, setStatus] = useState<ZenMuxBrowserStatus>()
@@ -207,7 +190,6 @@ function ZenMuxCommandCard({ node }: CommandRowProps): ReactNode {
 /** Mount popup behavior and the ZenMux command card into DSH Web. */
 export function apply(ctx: Context): void {
   installSearchableModelSelect(ctx)
-  ctx.effect(installOAuthWakeRefresh, 'zenmux.oauth-wake-refresh')
 
   ctx.on('command/executed', (_sessionId, commandName, result) => {
     if (commandName !== 'zenmux') return

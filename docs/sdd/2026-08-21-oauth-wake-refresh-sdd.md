@@ -1,16 +1,16 @@
-# OAuth wake refresh
+# OAuth refresh on credential use
 
 ## Background
 
-Node timers pause while a laptop sleeps. After wake, DSH Web can submit a model
-request before the scheduled OAuth refresh completes, briefly exposing an
-expired access token as `API key is invalid`.
+Timer-driven refresh can be delayed while a laptop sleeps. After wake, DSH can
+submit a model request before the timer completes and expose an expired access
+token as `API key is invalid`.
 
 ## Goals
 
-- Refresh an expired or near-expiry token when DSH Web becomes active.
-- Make the browser OAuth status endpoint wait for that refresh.
-- Preserve the existing scheduled refresh and credential format.
+- Check and refresh an expired or near-expiry token every time a consumer
+  resolves the OAuth access-token credential.
+- Preserve the credential format and existing provider configuration.
 
 ## Non-goals
 
@@ -18,29 +18,28 @@ expired access token as `API key is invalid`.
 
 ## Affected files
 
-- `src/index.ts`: refresh before returning OAuth status.
-- `src/client.ts`: probe OAuth status on mount and visibility restoration.
-- `tests/zenmux-oauth.spec.ts`, `tests/client.spec.ts`: wake-refresh coverage.
+- `src/index.ts`: wrap the credential provider's per-operation `resolve` seam.
+- `tests/zenmux-oauth.spec.ts`: per-use refresh coverage.
 
 ## Control flow
 
-On initial Web mount or `visibilitychange` to visible, the client calls the
-credential-free status endpoint. If the stored token is inside the configured
-refresh skew, the controller serializes a refresh through its existing queue,
-persists the rotated token set and access-token mirror, then returns status.
-Concurrent status calls re-check expiry inside the queue to avoid duplicate
-refresh-token rotation.
+DSH consumers resolve credentials once per model operation. For the configured
+ZenMux access-token reference, the plugin serializes an expiry check through its
+existing queue. If the token is inside the refresh skew, it refreshes and
+persists the rotated token set before returning the credential. Concurrent
+resolutions re-check expiry inside the queue to avoid duplicate rotation.
 
 ## Edge cases
 
-- Hidden pages do not probe.
-- A failed wake refresh is logged and returned to the existing retry scheduler.
+- Non-ZenMux credential references pass through unchanged.
+- A refresh failure rejects credential resolution instead of returning an
+  expired token.
 - Missing OAuth state and separately configured manual credentials are unchanged.
 
 ## Validation
 
-- Unit test expired-token refresh through the real browser-status route.
-- Unit test initial and visibility-restored client probes.
+- Unit test expired-token refresh through credential resolution.
+- Verify a second resolution reuses the refreshed token without rotating again.
 - Run the complete package test suite and package build.
 
 ## Rollout and compatibility

@@ -95,7 +95,6 @@ async function harness(
     loginTimeoutMs: 5_000,
     requestTimeoutMs: 5_000,
     refreshSkewMs: 1_000,
-    refreshRetryMs: 10,
     ...overrides,
   })
   const agent = stubAgent(ctx, `zenmux-oauth-${Math.random()}`)
@@ -294,9 +293,7 @@ describe('/zenmux OAuth PKCE lifecycle', () => {
       await ctx.credentials.set(TOKENS_REF, expired)
       await ctx.credentials.set(ACCESS_REF, 'interrupted-mirror')
     })
-    await vi.waitFor(async () => {
-      expect(await test.ctx.credentials.resolve(ACCESS_REF)).toEqual({ value: 'access-new', source: 'file' })
-    })
+    expect(await test.ctx.credentials.resolve(ACCESS_REF)).toEqual({ value: 'access-new', source: 'file' })
     const stored = await test.ctx.credentials.resolve(TOKENS_REF)
     expect(JSON.parse(stored?.value ?? '{}')).toMatchObject({
       accessToken: 'access-new',
@@ -304,7 +301,7 @@ describe('/zenmux OAuth PKCE lifecycle', () => {
     })
   })
 
-  it('refreshes an expired token before returning browser status after wake', async () => {
+  it('refreshes an expired token every time a consumer resolves the access credential', async () => {
     const tokenRequests = mockOAuth([{
       access_token: 'access-after-wake',
       refresh_token: 'refresh-after-wake',
@@ -319,22 +316,20 @@ describe('/zenmux OAuth PKCE lifecycle', () => {
       expiresAt: Date.now() - 1,
     })
     const test = await harness(async (ctx) => {
-      await ctx.plugin(WebServer, { host: '127.0.0.1', port: 0 })
       await ctx.credentials.set(TOKENS_REF, expired)
       await ctx.credentials.set(ACCESS_REF, 'access-before-sleep')
-    }, '', { refreshRetryMs: 60_000 })
+    })
 
-    const browserStatus = await callback(`http://127.0.0.1:${test.ctx.webServer.port}/zenmux/oauth/status`)
-    expect(browserStatus.status).toBe(200)
-    expect(JSON.parse(browserStatus.body)).toMatchObject({
-      connected: true,
-      detail: expect.stringContaining('is connected'),
+    expect(await test.ctx.credentials.resolve(ACCESS_REF)).toEqual({
+      value: 'access-after-wake',
+      source: 'file',
     })
     expect(tokenRequests).toHaveLength(1)
     expect(await test.ctx.credentials.resolve(ACCESS_REF)).toEqual({
       value: 'access-after-wake',
       source: 'file',
     })
+    expect(tokenRequests).toHaveLength(1)
   })
 
   it('logs out without deleting an unrelated manually replaced API key', async () => {

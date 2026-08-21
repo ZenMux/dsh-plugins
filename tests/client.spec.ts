@@ -6,7 +6,6 @@ import {
   authorizationUrlFromText,
   BROWSER_AUTO_OPEN_DISABLED_LINE,
   fetchZenMuxBrowserStatus,
-  installOAuthWakeRefresh,
   openAuthorizationWindow,
 } from '../src/client.ts'
 
@@ -75,30 +74,6 @@ describe('ZenMux DSH Web client', () => {
     expect(fetchMock).toHaveBeenCalledWith('/zenmux/oauth/status', {
       headers: { Accept: 'application/json' },
     })
-    vi.unstubAllGlobals()
-  })
-
-  it('asks the host to refresh OAuth state on mount and when the page becomes visible', async () => {
-    const listeners = new Map<string, () => void>()
-    const documentMock = {
-      visibilityState: 'visible',
-      addEventListener: vi.fn((name: string, listener: () => void) => listeners.set(name, listener)),
-      removeEventListener: vi.fn((name: string) => listeners.delete(name)),
-    }
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      connected: true,
-      detail: 'ZenMux OAuth is connected.',
-    }), { status: 200 }))
-    vi.stubGlobal('document', documentMock)
-    vi.stubGlobal('fetch', fetchMock)
-
-    const dispose = installOAuthWakeRefresh()
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1))
-    listeners.get('visibilitychange')?.()
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
-    dispose()
-
-    expect(documentMock.removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function))
     vi.unstubAllGlobals()
   })
 })

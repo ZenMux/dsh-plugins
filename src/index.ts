@@ -13,7 +13,7 @@ import { request as httpsRequest } from 'node:https'
 import type { AddressInfo } from 'node:net'
 import type { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
+import type { CredentialRef, ResolvedCredential } from '@deepseek-ai/dsh-credentials'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import z from '@deepseek-ai/schemastery'
 import { HttpsProxyAgent } from 'https-proxy-agent'
@@ -75,8 +75,6 @@ export interface Config {
   requestTimeoutMs: number
   /** Refresh this long before the access-token expiry. */
   refreshSkewMs: number
-  /** Delay before retrying a failed background refresh. */
-  refreshRetryMs: number
 }
 
 /** Validated Cordis configuration. */
@@ -92,7 +90,6 @@ export const Config: z<Config> = z.object({
   loginTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(5 * 60_000),
   requestTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
   refreshSkewMs: z.number().min(0).max(MAX_TIMER_DELAY_MS).default(60_000),
-  refreshRetryMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(30_000),
 })
 
 interface ResolvedConfig extends Omit<Config, 'accessTokenRef' | 'tokenSetRef'> {
@@ -173,7 +170,6 @@ function resolveConfig(config: Config): ResolvedConfig {
     loginTimeoutMs: config.loginTimeoutMs,
     requestTimeoutMs: config.requestTimeoutMs,
     refreshSkewMs: config.refreshSkewMs,
-    refreshRetryMs: config.refreshRetryMs,
   })
 }
 
@@ -357,22 +353,35 @@ class ZenMuxOAuthController {
   private readonly proxyAgent: HttpsProxyAgent<string> | SocksProxyAgent | undefined
   private metadataValue: OAuthMetadata | undefined
   private pending: PendingLogin | undefined
-  private refreshTimer: NodeJS.Timeout | undefined
   private queueTail: Promise<void> = Promise.resolve()
   private tokenSet: StoredTokenSet | undefined
+  private readonly resolveCredential: (ref: CredentialRef) => Promise<ResolvedCredential | undefined>
 
   /** @param ctx - injected command and credential services. @param config - resolved deployment values. */
   constructor(private readonly ctx: Context, private readonly config: ResolvedConfig) {
     this.proxyAgent = createProxyAgent(config.proxyUrl)
+    this.resolveCredential = ctx.credentials.resolve.bind(ctx.credentials)
   }
 
-  /** Restore stored state, repair its access-token mirror, and begin refresh scheduling. */
+  /** Restore stored state and repair its access-token mirror. */
   async start(): Promise<void> {
-    const hit = await this.ctx.credentials.resolve(this.config.tokenSetRef)
+    const hit = await this.resolveCredential(this.config.tokenSetRef)
     if (hit === undefined) return
     this.tokenSet = parseStoredTokenSet(hit.value)
     await this.repairMirror(this.tokenSet)
-    this.scheduleRefresh(this.tokenSet)
+  }
+
+  /** Refresh the OAuth access token at the credential's per-operation resolution seam. */
+  installCredentialRefresh(): () => void {
+    const provider = this.ctx.credentials
+    const resolve = async (ref: CredentialRef): Promise<ResolvedCredential | undefined> => {
+      if (ref === this.config.accessTokenRef) await this.ensureFreshAccessToken()
+      return this.resolveCredential(ref)
+    }
+    provider.resolve = resolve
+    return () => {
+      if (provider.resolve === resolve) provider.resolve = this.resolveCredential
+    }
   }
 
   /** Execute `/zenmux` without placing OAuth material in the session log. */
@@ -411,45 +420,22 @@ class ZenMuxOAuthController {
   /** Stop admission, close the loopback listener, abort I/O, and await token mutations. */
   async dispose(): Promise<void> {
     this.lifetime.abort(new Error('zenmux disposed'))
-    if (this.refreshTimer !== undefined) clearTimeout(this.refreshTimer)
-    this.refreshTimer = undefined
     await this.stopPending()
     await this.queueTail
   }
 
   /** Current human-readable state without exposing token values. */
   private async status(): Promise<string> {
-    await this.refreshForStatus()
     const tokenSet = this.tokenSet
     if (tokenSet !== undefined) {
       const expires = new Date(tokenSet.expiresAt).toISOString()
       return `ZenMux OAuth is connected. Access token expiry: ${expires}.`
     }
-    const manual = await this.ctx.credentials.resolve(this.config.accessTokenRef)
+    const manual = await this.resolveCredential(this.config.accessTokenRef)
     if (manual !== undefined) {
       return `No ZenMux OAuth session is stored. ${this.config.accessTokenRef} is configured separately.`
     }
     return 'ZenMux is not connected. Run /zenmux login.'
-  }
-
-  /** Refresh a stale token before reporting browser-visible connection state. */
-  private async refreshForStatus(): Promise<void> {
-    const tokenSet = this.tokenSet
-    if (tokenSet === undefined || tokenSet.expiresAt - Date.now() > this.config.refreshSkewMs) return
-    try {
-      await this.enqueue(async () => {
-        const current = this.tokenSet
-        if (current !== undefined && current.expiresAt - Date.now() <= this.config.refreshSkewMs) {
-          await this.refresh()
-        }
-      })
-    } catch (error) {
-      this.ctx.logger.warn(
-        'zenmux: token refresh on status failed: %s',
-        error instanceof Error ? error.message : String(error),
-      )
-      this.scheduleRefreshRetry()
-    }
   }
 
   /** Read the OAuth state for the DSH Web card without recording another command. */
@@ -625,45 +611,23 @@ class ZenMuxOAuthController {
     await this.ctx.credentials.set(this.config.tokenSetRef, JSON.stringify(next))
     this.tokenSet = next
     await this.ctx.credentials.set(this.config.accessTokenRef, next.accessToken)
-    this.scheduleRefresh(next)
   }
 
   /** Repair a crash between token-set commit and access-token mirror commit. */
   private async repairMirror(tokenSet: StoredTokenSet): Promise<void> {
-    const mirror = await this.ctx.credentials.resolve(this.config.accessTokenRef)
+    const mirror = await this.resolveCredential(this.config.accessTokenRef)
     if (mirror?.value === tokenSet.accessToken) return
     await this.ctx.credentials.set(this.config.accessTokenRef, tokenSet.accessToken)
   }
 
-  /** Schedule early refresh or a bounded-delay timer for expiries beyond Node's timer range. */
-  private scheduleRefresh(tokenSet: StoredTokenSet): void {
-    if (this.refreshTimer !== undefined) clearTimeout(this.refreshTimer)
-    const desiredDelay = Math.max(0, tokenSet.expiresAt - Date.now() - this.config.refreshSkewMs)
-    const delay = Math.min(desiredDelay, MAX_TIMER_DELAY_MS)
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = undefined
-      if (desiredDelay > MAX_TIMER_DELAY_MS) {
-        this.scheduleRefresh(tokenSet)
-        return
+  /** Refresh once, immediately before a consumer resolves the access-token reference. */
+  private async ensureFreshAccessToken(): Promise<void> {
+    await this.enqueue(async () => {
+      const current = this.tokenSet
+      if (current !== undefined && current.expiresAt - Date.now() <= this.config.refreshSkewMs) {
+        await this.refresh()
       }
-      void this.enqueue(() => this.refresh()).catch(() => {
-        this.scheduleRefreshRetry()
-      })
-    }, delay)
-    this.refreshTimer.unref()
-  }
-
-  /** Retry a failed refresh until success, logout, or plugin disposal. */
-  private scheduleRefreshRetry(): void {
-    if (this.lifetime.signal.aborted || this.tokenSet === undefined) return
-    this.ctx.logger.warn('zenmux: background token refresh failed; retrying in %d ms', this.config.refreshRetryMs)
-    this.refreshTimer = setTimeout(() => {
-      this.refreshTimer = undefined
-      void this.enqueue(() => this.refresh()).catch(() => {
-        this.scheduleRefreshRetry()
-      })
-    }, this.config.refreshRetryMs)
-    this.refreshTimer.unref()
+    })
   }
 
   /** Revoke remotely when possible, then remove only this plugin's local mirror. */
@@ -687,13 +651,11 @@ class ZenMuxOAuthController {
       } catch {
         warning = 'ZenMux OAuth credentials removed locally; remote revocation could not be confirmed.'
       }
-      const mirror = await this.ctx.credentials.resolve(this.config.accessTokenRef)
+      const mirror = await this.resolveCredential(this.config.accessTokenRef)
       if (mirror?.value === current.accessToken) await this.ctx.credentials.unset(this.config.accessTokenRef)
     }
     await this.ctx.credentials.unset(this.config.tokenSetRef)
     this.tokenSet = undefined
-    if (this.refreshTimer !== undefined) clearTimeout(this.refreshTimer)
-    this.refreshTimer = undefined
     return warning
   }
 
@@ -760,6 +722,8 @@ class ZenMuxOAuthController {
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new ZenMuxOAuthController(ctx, resolveConfig(config))
   await controller.start()
+  const restoreCredentialResolve = controller.installCredentialRefresh()
+  ctx.effect(() => restoreCredentialResolve, 'zenmux.credential-refresh')
   ctx.effect(() => () => controller.dispose(), 'zenmux.lifecycle')
   ctx.inject(['webServer'], (httpCtx) => {
     httpCtx.effect(() => httpCtx.webServer.register({
