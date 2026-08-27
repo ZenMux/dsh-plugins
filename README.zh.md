@@ -53,6 +53,14 @@ dsh web
 dsh plugin --profile web list --depth 0
 ```
 
+刷新 ZenMux 模型目录（会写入设置文件，随后重启 DSH）：
+
+```text
+/zenmux models refresh
+```
+
+该命令会同时请求 ZenMux 的 OpenAI 与 Anthropic 模型列表，并保留 OAuth 凭据及其他 provider 配置。
+
 ## 常见问题
 
 ### 已是最新版，但仍只有几个模型

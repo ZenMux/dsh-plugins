@@ -53,6 +53,14 @@ Confirm the installed version with:
 dsh plugin --profile web list --depth 0
 ```
 
+Refresh the ZenMux model catalog (the command updates the settings file; restart DSH afterward):
+
+```text
+/zenmux models refresh
+```
+
+The command fetches both ZenMux OpenAI and Anthropic listings and preserves OAuth credentials and other provider settings.
+
 ## Troubleshooting
 
 ### The latest plugin still shows only a few models
