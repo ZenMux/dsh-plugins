@@ -170,12 +170,21 @@ describe('ZenMux plugin registration', () => {
     expect('default' in zenmuxOAuth).toBe(false)
     expect(test.ctx.commands.list(test.agent)).toContainEqual({
       name: 'zenmux',
-      description: 'sign in to ZenMux with OAuth PKCE or view its authentication status',
-      input: { hint: '[login|status|logout]' },
+      description: 'sign in to ZenMux, refresh its model catalog, or view authentication status',
+      input: { hint: '[login|status|logout|models refresh]' },
     })
 
     await test.plugin.dispose()
     expect(test.ctx.commands.find(test.agent, 'zenmux')).toBeUndefined()
+  })
+
+  it('reports an unavailable optional settings service without violating Cordis injection', async () => {
+    const test = await harness()
+    const result = await run(test, ' models refresh')
+    expect(result).toEqual({
+      kind: 'error',
+      text: 'DSH settings service is unavailable; restart DSH and try again.',
+    })
   })
 
   it('requires remote DNS resolution for an explicit SOCKS route', async () => {

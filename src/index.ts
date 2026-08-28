@@ -187,6 +187,10 @@ interface OAuthRequestInit {
   readonly body?: URLSearchParams
 }
 
+interface ModelSettings {
+  update(ns: string, patch: object): Promise<void>
+}
+
 /** Create the explicitly configured or environment-inherited OAuth proxy transport. */
 function createProxyAgent(proxyUrl: string): HttpsProxyAgent<string> | SocksProxyAgent | undefined {
   if (proxyUrl.length === 0) return undefined
@@ -356,6 +360,7 @@ class ZenMuxOAuthController {
   private pending: PendingLogin | undefined
   private queueTail: Promise<void> = Promise.resolve()
   private tokenSet: StoredTokenSet | undefined
+  private modelSettings: ModelSettings | undefined
   private readonly resolveCredential: (ref: CredentialRef) => Promise<ResolvedCredential | undefined>
 
   /** @param ctx - injected command and credential services. @param config - resolved deployment values. */
@@ -382,6 +387,14 @@ class ZenMuxOAuthController {
     provider.resolve = resolve
     return () => {
       if (provider.resolve === resolve) provider.resolve = this.resolveCredential
+    }
+  }
+
+  /** Attach DSH's optional settings service only from a correctly injected child context. */
+  installModelSettings(settings: ModelSettings): () => void {
+    this.modelSettings = settings
+    return () => {
+      if (this.modelSettings === settings) this.modelSettings = undefined
     }
   }
 
@@ -426,11 +439,10 @@ class ZenMuxOAuthController {
   }
 
   private async refreshModels(): Promise<string> {
-    const settingsValue: unknown = Reflect.get(this.ctx, 'settings')
-    if (typeof settingsValue !== 'object' || settingsValue === null) {
+    const settings = this.modelSettings
+    if (settings === undefined) {
       throw new Error('DSH settings service is unavailable; restart DSH and try again.')
     }
-    const settings = settingsValue as { update(ns: string, patch: object): Promise<void> }
     await this.ensureFreshAccessToken()
     const credential = await this.resolveCredential(this.config.accessTokenRef)
     if (credential?.value === undefined) throw new Error('ZenMux is not connected. Run /zenmux login first.')
@@ -765,6 +777,11 @@ class ZenMuxOAuthController {
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const controller = new ZenMuxOAuthController(ctx, resolveConfig(config))
   await controller.start()
+  ctx.inject(['settings'], (settingsCtx) => {
+    const injected = settingsCtx as Context & { readonly settings: ModelSettings }
+    const uninstall = controller.installModelSettings(injected.settings)
+    settingsCtx.effect(() => uninstall, 'zenmux.model-settings')
+  })
   const restoreCredentialResolve = controller.installCredentialRefresh()
   ctx.effect(() => restoreCredentialResolve, 'zenmux.credential-refresh')
   ctx.effect(() => () => controller.dispose(), 'zenmux.lifecycle')
@@ -790,8 +807,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   })
   ctx.commands.register({
     name: 'zenmux',
-    description: 'sign in to ZenMux with OAuth PKCE or view its authentication status',
-    input: { hint: '[login|status|logout]' },
+    description: 'sign in to ZenMux, refresh its model catalog, or view authentication status',
+    input: { hint: '[login|status|logout|models refresh]' },
     handler: invocation => controller.command(invocation.rawInput),
   })
 }

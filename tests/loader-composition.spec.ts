@@ -132,8 +132,8 @@ describe('ZenMux real composition', () => {
     ctx.agents.register(agent)
     expect(ctx.commands.list(agent)).toContainEqual({
       name: 'zenmux',
-      description: 'sign in to ZenMux with OAuth PKCE or view its authentication status',
-      input: { hint: '[login|status|logout]' },
+      description: 'sign in to ZenMux, refresh its model catalog, or view authentication status',
+      input: { hint: '[login|status|logout|models refresh]' },
     })
   })
 })
