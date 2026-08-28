@@ -187,6 +187,36 @@ describe('ZenMux plugin registration', () => {
     })
   })
 
+  it('accepts model catalogs larger than the OAuth response limit', async () => {
+    const update = vi.fn(() => Promise.resolve())
+    const catalogPadding = 'x'.repeat(70 * 1024)
+    vi.stubGlobal('fetch', vi.fn((input: string | URL | Request) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
+      const data = url.includes('/anthropic/')
+        ? [{ id: 'anthropic/model', display_name: 'Anthropic model', output_modalities: ['text'] }]
+        : [
+            { id: 'anthropic/model', display_name: 'Anthropic model', output_modalities: ['text'] },
+            { id: 'openai/model', display_name: 'OpenAI model', output_modalities: ['text'] },
+          ]
+      return Promise.resolve(new Response(JSON.stringify({ data, padding: catalogPadding }), { status: 200 }))
+    }))
+    const test = await harness(async (ctx) => {
+      await ctx.credentials.set(ACCESS_REF, 'manual-access')
+      ctx.provide('settings', { update })
+    })
+
+    await expect(run(test, ' models refresh')).resolves.toEqual({
+      kind: 'success',
+      text: 'ZenMux models refreshed: 1 Anthropic + 1 OpenAI-only. Restart DSH to apply.',
+    })
+    expect(update).toHaveBeenCalledWith('llm-pi-ai', {
+      providers: {
+        zenmux: { models: [expect.objectContaining({ id: 'anthropic/model' })] },
+        'zenmux-models': { models: [expect.objectContaining({ id: 'openai/model' })] },
+      },
+    })
+  })
+
   it('requires remote DNS resolution for an explicit SOCKS route', async () => {
     await expect(harness(undefined, 'socks5://proxy.example.test:9999')).rejects.toThrow(
       'proxyUrl must use http://, https://, socks4a://, or socks5h://',

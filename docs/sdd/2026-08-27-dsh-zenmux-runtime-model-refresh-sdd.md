@@ -23,11 +23,11 @@ The plugin's bundled catalog is a release snapshot, so newly published ZenMux mo
 
 ## Control flow and API
 
-The plugin attaches the settings service through `ctx.inject(['settings'], ...)` and retains only the injected service reference. The command refreshes the OAuth token, requests `/api/v1/models` and `/api/anthropic/v1/models`, filters text-output entries, removes duplicate Anthropic IDs from the OpenAI group, and updates namespace `llm-pi-ai` provider overrides. The command reports counts and instructs the user to restart DSH.
+The plugin attaches the settings service through `ctx.inject(['settings'], ...)` and retains only the injected service reference. The command refreshes the OAuth token, requests `/api/v1/models` and `/api/anthropic/v1/models`, filters text-output entries, removes duplicate Anthropic IDs from the OpenAI group, and updates namespace `llm-pi-ai` provider overrides. OAuth metadata and token responses retain the 64 KiB limit, while model-list responses use an independent 4 MiB limit. The command reports counts and instructs the user to restart DSH.
 
 ## Edge cases and validation
 
-Malformed responses, HTTP failures, missing authentication, empty groups, and unavailable settings fail without writing. Tests also verify that an absent optional settings service returns the plugin error rather than triggering Cordis's `cannot get property without inject` guard.
+Malformed responses, HTTP failures, missing authentication, empty groups, unavailable settings, and model listings over 4 MiB fail without writing. Tests also verify that an absent optional settings service returns the plugin error rather than triggering Cordis's `cannot get property without inject` guard, and that valid catalogs larger than the OAuth-only 64 KiB limit succeed.
 
 ## Rollout / compatibility
 

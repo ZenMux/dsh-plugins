@@ -37,7 +37,8 @@ const PRODUCTION_OAUTH_ORIGIN = 'https://zenmux.ai'
 const CALLBACK_HOST = '127.0.0.1'
 const CALLBACK_PATH = '/callback'
 const TOKEN_SET_VERSION = 1
-const MAX_WIRE_JSON_BYTES = 64 * 1024
+const MAX_OAUTH_JSON_BYTES = 64 * 1024
+const MAX_MODEL_CATALOG_JSON_BYTES = 4 * 1024 * 1024
 const DEFAULT_CLIENT_ID = 'zpc_TpZNdEix0d_c_bFrBrUzwXOp'
 const DEFAULT_SCOPES = ['inference:invoke', 'offline_access']
 
@@ -187,6 +188,21 @@ interface OAuthRequestInit {
   readonly body?: URLSearchParams
 }
 
+interface ResponseLimit {
+  readonly bytes: number
+  readonly subject: string
+}
+
+const OAUTH_RESPONSE_LIMIT: ResponseLimit = {
+  bytes: MAX_OAUTH_JSON_BYTES,
+  subject: 'ZenMux OAuth response',
+}
+
+const MODEL_CATALOG_RESPONSE_LIMIT: ResponseLimit = {
+  bytes: MAX_MODEL_CATALOG_JSON_BYTES,
+  subject: 'ZenMux model catalog response',
+}
+
 interface ModelSettings {
   update(ns: string, patch: object): Promise<void>
 }
@@ -215,8 +231,8 @@ function stringField(record: Record<string, unknown>, field: string): string {
 
 /** Parse one JSON object returned across the OAuth wire boundary. */
 function parseJsonObject(text: string, subject: string): Record<string, unknown> {
-  if (Buffer.byteLength(text, 'utf8') > MAX_WIRE_JSON_BYTES) {
-    throw new Error(`${subject} exceeded ${MAX_WIRE_JSON_BYTES} bytes`)
+  if (Buffer.byteLength(text, 'utf8') > MAX_OAUTH_JSON_BYTES) {
+    throw new Error(`${subject} exceeded ${MAX_OAUTH_JSON_BYTES} bytes`)
   }
   let value: unknown
   try {
@@ -450,8 +466,16 @@ class ZenMuxOAuthController {
     const anthropicBaseUrl = process.env.ZENMUX_ANTHROPIC_BASE_URL?.trim()
       || `${new URL(baseUrl).origin}/api/anthropic`
     const [openaiResponse, anthropicResponse] = await Promise.all([
-      this.fetch(`${baseUrl.replace(/\/+$/u, '')}/models`, { method: 'GET', headers: { Authorization: `Bearer ${credential.value}` } }),
-      this.fetch(`${anthropicBaseUrl.replace(/\/+$/u, '')}/v1/models`, { method: 'GET', headers: { Authorization: `Bearer ${credential.value}` } }),
+      this.fetch(
+        `${baseUrl.replace(/\/+$/u, '')}/models`,
+        { method: 'GET', headers: { Authorization: `Bearer ${credential.value}` } },
+        MODEL_CATALOG_RESPONSE_LIMIT,
+      ),
+      this.fetch(
+        `${anthropicBaseUrl.replace(/\/+$/u, '')}/v1/models`,
+        { method: 'GET', headers: { Authorization: `Bearer ${credential.value}` } },
+        MODEL_CATALOG_RESPONSE_LIMIT,
+      ),
     ])
     if (!openaiResponse.ok || !anthropicResponse.ok) {
       throw new Error(`ZenMux model listing failed (OpenAI HTTP ${openaiResponse.status}, Anthropic HTTP ${anthropicResponse.status}).`)
@@ -733,9 +757,29 @@ class ZenMuxOAuthController {
   }
 
   /** Fetch under both the plugin lifetime and a per-request timeout. */
-  private fetch(input: string, init?: OAuthRequestInit): Promise<OAuthHttpResponse> {
+  private async fetch(
+    input: string,
+    init?: OAuthRequestInit,
+    limit: ResponseLimit = OAUTH_RESPONSE_LIMIT,
+  ): Promise<OAuthHttpResponse> {
     const signal = AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(this.config.requestTimeoutMs)])
-    if (this.proxyAgent === undefined) return fetch(input, { ...init, signal })
+    if (this.proxyAgent === undefined) {
+      const response = await fetch(input, { ...init, signal })
+      let body: Promise<string> | undefined
+      return {
+        ok: response.ok,
+        status: response.status,
+        text: () => {
+          body ??= response.text().then((text) => {
+            if (Buffer.byteLength(text, 'utf8') > limit.bytes) {
+              throw new Error(`${limit.subject} exceeded ${limit.bytes} bytes`)
+            }
+            return text
+          })
+          return body
+        },
+      }
+    }
     return new Promise((resolve, reject) => {
       const request = httpsRequest(input, {
         method: init?.method ?? 'GET',
@@ -748,8 +792,8 @@ class ZenMuxOAuthController {
         let bytes = 0
         response.on('data', (chunk: string) => {
           bytes += Buffer.byteLength(chunk, 'utf8')
-          if (bytes > MAX_WIRE_JSON_BYTES) {
-            response.destroy(new Error(`ZenMux OAuth response exceeded ${MAX_WIRE_JSON_BYTES} bytes`))
+          if (bytes > limit.bytes) {
+            response.destroy(new Error(`${limit.subject} exceeded ${limit.bytes} bytes`))
             return
           }
           chunks.push(chunk)
