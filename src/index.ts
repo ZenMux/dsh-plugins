@@ -19,6 +19,7 @@ import z from '@deepseek-ai/schemastery'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 import { partitionRefreshModels } from './model-refresh.js'
+import { installZenMuxSessionHeader } from './session-header.js'
 import {
   BROWSER_AUTO_OPEN_DISABLED_LINE,
   OAUTH_ORIGIN_LINE_PREFIX,
@@ -27,6 +28,7 @@ import {
 // Side-effect type imports: declaration-merge the injected services onto Context.
 import type {} from '@deepseek-ai/dsh-commands'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import type {} from '@deepseek-ai/dsh-llm'
 
 /** Cordis plugin name. */
 export const name = 'zenmux'
@@ -825,6 +827,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const injected = settingsCtx as Context & { readonly settings: ModelSettings }
     const uninstall = controller.installModelSettings(injected.settings)
     settingsCtx.effect(() => uninstall, 'zenmux.model-settings')
+  })
+  ctx.inject(['llm'], (llmCtx) => {
+    const uninstall = installZenMuxSessionHeader(llmCtx)
+    llmCtx.effect(() => uninstall, 'zenmux.session-header')
   })
   const restoreCredentialResolve = controller.installCredentialRefresh()
   ctx.effect(() => restoreCredentialResolve, 'zenmux.credential-refresh')

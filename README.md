@@ -10,7 +10,8 @@ Use ZenMux models in DeepSeek Harness (DSH) without copying an API key. Sign in 
 - 150 searchable text models in the current bundled catalog.
 - 126 models routed through Anthropic Messages with prompt-cache controls.
 - 24 OpenAI-only models routed through Chat Completions.
-- `/zenmux login`, `/zenmux status`, and `/zenmux logout` commands.
+- Every ZenMux inference request carries the current DSH session in `x-zenmux-session-id`.
+- `/zenmux login`, `/zenmux status`, `/zenmux logout`, and `/zenmux models refresh` commands.
 
 ## Install
 

@@ -10,7 +10,8 @@
 - 当前随包目录包含 150 个可搜索的文本模型。
 - 126 个模型通过 Anthropic Messages 调用，并启用提示词缓存控制。
 - 24 个仅支持 OpenAI 的模型通过 Chat Completions 调用。
-- 提供 `/zenmux login`、`/zenmux status`、`/zenmux logout` 命令。
+- 每次 ZenMux 推理请求都会通过 `x-zenmux-session-id` 携带当前 DSH 会话 ID。
+- 提供 `/zenmux login`、`/zenmux status`、`/zenmux logout`、`/zenmux models refresh` 命令。
 
 ## 安装
 
