@@ -16,7 +16,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add @zenmux/dsh-plugins@latest
+dsh plugin --profile web update @zenmux/dsh-plugins --latest
 dsh web
 ```
 
