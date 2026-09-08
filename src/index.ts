@@ -370,6 +370,20 @@ function callbackPage(response: ServerResponse, status: number, title: string, m
   response.end(`<!doctype html><meta charset="utf-8"><title>${title}</title><style>body{font:16px system-ui;max-width:42rem;margin:4rem auto;padding:0 1rem}h1{font-size:1.5rem}</style><h1>${title}</h1><p>${message}</p>`)
 }
 
+/** Show ZenMux's client-aware completion UI after credentials are safely stored. */
+function completionPage(response: ServerResponse, clientId: string): void {
+  const completionUrl = new URL('https://pre.zenmux.ai/platform/oauth-completed')
+  completionUrl.searchParams.set('clientId', clientId)
+  response.writeHead(200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store',
+    'Content-Security-Policy': "default-src 'none'; frame-src https://pre.zenmux.ai; style-src 'unsafe-inline'",
+    'Referrer-Policy': 'no-referrer',
+    'X-Content-Type-Options': 'nosniff',
+  })
+  response.end(`<!doctype html><html><head><meta charset="utf-8"><title>ZenMux connected</title><style>html,body,iframe{width:100%;height:100%;margin:0;border:0}body{overflow:hidden}iframe{display:block}</style></head><body><iframe src="${completionUrl.href}" title="ZenMux login completed" referrerpolicy="no-referrer"></iframe></body></html>`)
+}
+
 /** One plugin instance's login, persistence, refresh, and disposal lifecycle. */
 class ZenMuxOAuthController {
   private readonly lifetime = new AbortController()
@@ -624,7 +638,7 @@ class ZenMuxOAuthController {
         }
         await this.commitTokenResponse(token, token.refreshToken)
       })
-      callbackPage(response, 200, 'ZenMux connected', 'Login succeeded. You may close this tab and return to DeepSeek Harness.')
+      completionPage(response, this.config.clientId)
     } catch {
       this.ctx.logger.warn('zenmux: authorization-code exchange failed')
       callbackPage(response, 502, 'ZenMux login failed', 'The authorization code could not be exchanged. Return to DeepSeek Harness and try again.')

@@ -114,7 +114,7 @@ async function run(test: Harness, input = ''): Promise<{ kind: string; text?: st
 }
 
 /** Perform a loopback GET without using the mocked global fetch. */
-function callback(url: string): Promise<{ status: number; body: string }> {
+function callback(url: string): Promise<{ status: number; body: string; headers: Record<string, string | string[] | undefined> }> {
   return new Promise((resolve, reject) => {
     get(url, (response) => {
       const chunks: string[] = []
@@ -123,7 +123,7 @@ function callback(url: string): Promise<{ status: number; body: string }> {
         chunks.push(chunk)
       })
       response.on('end', () => {
-        resolve({ status: response.statusCode ?? 0, body: chunks.join('') })
+        resolve({ status: response.statusCode ?? 0, body: chunks.join(''), headers: response.headers })
       })
     }).once('error', reject)
   })
@@ -288,7 +288,13 @@ describe('/zenmux OAuth PKCE lifecycle', () => {
     accepted.searchParams.set('state', authorization.searchParams.get('state') ?? '')
     const page = await callback(accepted.href)
     expect(page.status).toBe(200)
-    expect(page.body).toContain('ZenMux connected')
+    expect(page.headers['content-type']).toBe('text/html; charset=utf-8')
+    expect(page.body).toContain('<iframe')
+    expect(page.body).toContain(
+      'src="https://pre.zenmux.ai/platform/oauth-completed?clientId=zpc_TpZNdEix0d_c_bFrBrUzwXOp"',
+    )
+    expect(page.body).not.toContain('authorization-code')
+    expect(page.body).not.toContain('access-one')
     expect(await test.ctx.credentials.resolve(ACCESS_REF)).toEqual({ value: 'access-one', source: 'file' })
     const stored = await test.ctx.credentials.resolve(TOKENS_REF)
     expect(stored?.source).toBe('file')
